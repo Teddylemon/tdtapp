@@ -45,6 +45,11 @@ const topicMapImageModules = import.meta.glob("../imgs/主题地图/*.{png,jpg,j
   import: "default",
 });
 
+const resourceCloudImageModules = import.meta.glob("../imgs/cloud/*.{png,jpg,jpeg,webp}", {
+  eager: true,
+  import: "default",
+});
+
 const reviewImageModules = import.meta.glob("../imgs/*.{png,jpg,jpeg,webp}", {
   eager: true,
   import: "default",
@@ -53,6 +58,17 @@ const reviewImageModules = import.meta.glob("../imgs/*.{png,jpg,jpeg,webp}", {
 const topicMapImageMap = Object.fromEntries(
   Object.entries(topicMapImageModules).map(([filePath, url]) => [
     filePath.split("/").pop().replace(/\.[^.]+$/, ""),
+    url,
+  ]),
+);
+
+const resourceCloudImageMap = Object.fromEntries(
+  Object.entries(resourceCloudImageModules).map(([filePath, url]) => [
+    filePath
+      .split("/")
+      .pop()
+      .replace(/\.[^.]+$/, "")
+      .replace(/词云-云朵版$/, ""),
     url,
   ]),
 );
@@ -390,39 +406,51 @@ const keywordCloud = [
 
 const analysisHotSearchTimeline = {
   day: {
-    title: "当日热搜",
+    title: "当日热门功能",
     window: "近24小时",
     items: [
-      { keyword: "防汛隐患点", heat: "2.8万" },
-      { keyword: "校园安全专题", heat: "2.1万" },
-      { keyword: "历史影像对比", heat: "1.9万" },
-      { keyword: "离线底图下载", heat: "1.4万" },
-      { keyword: "轨迹回放", heat: "1.2万" },
-      { keyword: "景区导览", heat: "0.9万" },
+      { keyword: "搜索", heat: "4.8万次" },
+      { keyword: "专题图层", heat: "4.1万次" },
+      { keyword: "导航", heat: "3.7万次" },
+      { keyword: "AI小助手", heat: "3.3万次" },
+      { keyword: "主题地图", heat: "2.9万次" },
+      { keyword: "标准地图", heat: "2.5万次" },
+      { keyword: "标绘", heat: "2.2万次" },
+      { keyword: "多时相影像", heat: "1.9万次" },
+      { keyword: "轨迹记录", heat: "1.6万次" },
+      { keyword: "空间分析", heat: "1.2万次" },
     ],
   },
   week: {
-    title: "本周热搜",
+    title: "本周热门功能",
     window: "近7日",
     items: [
-      { keyword: "轨迹回放", heat: "8.6万" },
-      { keyword: "专题图层叠加", heat: "7.9万" },
-      { keyword: "城市更新影像", heat: "7.3万" },
-      { keyword: "应急避难点", heat: "6.8万" },
-      { keyword: "学校周边停车", heat: "6.1万" },
-      { keyword: "工业园区标绘", heat: "5.7万" },
+      { keyword: "搜索", heat: "28.6万次" },
+      { keyword: "专题图层", heat: "24.3万次" },
+      { keyword: "导航", heat: "22.1万次" },
+      { keyword: "AI小助手", heat: "20.4万次" },
+      { keyword: "主题地图", heat: "18.7万次" },
+      { keyword: "标准地图", heat: "17.1万次" },
+      { keyword: "标绘", heat: "15.8万次" },
+      { keyword: "多时相影像", heat: "14.2万次" },
+      { keyword: "轨迹记录", heat: "12.8万次" },
+      { keyword: "空间分析", heat: "10.6万次" },
     ],
   },
   month: {
-    title: "本月热搜",
+    title: "本月热门功能",
     window: "近30日",
     items: [
-      { keyword: "工业园区标绘", heat: "21.4万" },
-      { keyword: "景区导览", heat: "18.9万" },
-      { keyword: "学校周边停车", heat: "17.5万" },
-      { keyword: "雨水井巡检", heat: "15.7万" },
-      { keyword: "校园安全专题", heat: "13.8万" },
-      { keyword: "防汛隐患点", heat: "12.6万" },
+      { keyword: "搜索", heat: "118.4万次" },
+      { keyword: "专题图层", heat: "103.6万次" },
+      { keyword: "导航", heat: "96.2万次" },
+      { keyword: "AI小助手", heat: "88.9万次" },
+      { keyword: "主题地图", heat: "79.5万次" },
+      { keyword: "标准地图", heat: "73.4万次" },
+      { keyword: "标绘", heat: "68.8万次" },
+      { keyword: "多时相影像", heat: "61.7万次" },
+      { keyword: "轨迹记录", heat: "56.2万次" },
+      { keyword: "空间分析", heat: "44.9万次" },
     ],
   },
 };
@@ -430,28 +458,20 @@ const analysisHotSearchTimeline = {
 const resourceClouds = [
   {
     title: "专题图层",
-    words: ["防汛风险", "校园安全", "外业巡检", "景区导览", "城市更新"],
+    image: resourceCloudImageMap["专题图层"],
   },
   {
     title: "标准地图",
-    words: ["湖北省地图", "武汉市地图", "行政区划", "基础底图", "江岸区"],
+    image: resourceCloudImageMap["标准地图"],
   },
   {
     title: "主题地图",
-    words: ["教育专题", "文旅热力", "应急保障", "农业监测", "产业分布"],
+    image: resourceCloudImageMap["主题地图"],
   },
   {
     title: "多时相影像",
-    words: ["2024影像", "历史比对", "建设前后", "季度更新", "变化监测"],
+    image: resourceCloudImageMap["多时相影像"],
   },
-];
-
-const categoryRows = [
-  ["专题图层", "34.6%", "专题叠加与风险查询需求最集中"],
-  ["标准地图", "22.8%", "行政区和基础底图访问稳定"],
-  ["主题地图", "18.3%", "教育、文旅、应急主题更受关注"],
-  ["多时相影像", "15.1%", "影像对比与更新需求明显"],
-  ["POI / 地名", "9.2%", "导航类检索稳定承接"],
 ];
 
 const governanceCards = [
@@ -1851,6 +1871,9 @@ function AnalysisPage() {
     <div className="page-content analysis-page">
       <section className="analysis-hero-dashboard">
         <article className="analysis-metric-stage">
+          <div className="panel-header">
+            <h2>数据概览</h2>
+          </div>
           <div className="analysis-metric-mosaic">
             {totalUsersCard ? (
               <article className="stat-card analysis-stat-card analysis-stat-card--spotlight">
@@ -1952,13 +1975,13 @@ function AnalysisPage() {
               <img className="analysis-map-image" src={hubeiHeatmapImage} alt="湖北省用户分布热力图" />
             </div>
 
-            <aside className="analysis-hot-search-rail" aria-label="热门搜索">
+            <aside className="analysis-hot-search-rail" aria-label="热门功能分析">
               <div className="analysis-hot-search-head">
                 <div>
-                  <strong>热门搜索</strong>
+                  <strong>热门功能分析</strong>
                   <span>{hotSearchGroup.window}</span>
                 </div>
-                <div className="analysis-hot-search-tabs" role="tablist" aria-label="热门搜索时间维度">
+                <div className="analysis-hot-search-tabs" role="tablist" aria-label="热门功能时间维度">
                   {analysisHotSearchRanges.map((option) => (
                     <button
                       key={option.key}
@@ -1973,8 +1996,7 @@ function AnalysisPage() {
               </div>
               <div className="analysis-hot-search-timeline">
                 <div className="analysis-hot-search-group-head">
-                  <strong>{hotSearchGroup.title}</strong>
-                  <em>{hotSearchGroup.items.length} 个热词</em>
+                  <em>{hotSearchGroup.items.length} 项功能</em>
                 </div>
                 <div className="analysis-hot-search-list">
                   {hotSearchGroup.items.map((item, index) => (
@@ -1998,114 +2020,16 @@ function AnalysisPage() {
         </article>
       </section>
 
-      <section className="content-grid analysis-main">
-        <article className="panel">
-          <div className="panel-header">
-            <h2>核心功能使用分析</h2>
-            <button type="button" className="text-button">使用率 / 完成率 / 平均时长</button>
-          </div>
-          <div className="feature-usage-grid">
-            {featureCards.map((item) => (
-              <div key={item.name} className="feature-card">
-                <strong>{item.name}</strong>
-                <div className="feature-metric">
-                  <span>使用率 {item.usage}</span>
-                  <span>完成率 {item.complete}</span>
-                </div>
-                <div className="progress-pair">
-                  <div className="progress-line">
-                    <div className="progress-fill primary" style={{ width: item.usage }} />
-                  </div>
-                  <div className="progress-line">
-                    <div className="progress-fill success" style={{ width: item.complete }} />
-                  </div>
-                </div>
-                <em>平均时长 {item.duration}</em>
-                <p>{item.note}</p>
-              </div>
-            ))}
-          </div>
-        </article>
-
+      <section className="content-grid">
         <article className="panel">
           <div className="panel-header">
             <h2>数据资源热度</h2>
-            <button type="button" className="text-button">搜索热词与资源偏好</button>
           </div>
-          <div className="cloud-hero">
-            {keywordCloud.map((word, index) => (
-              <span key={word} className={`keyword-pill size-${(index % 4) + 1}`}>{word}</span>
-            ))}
-          </div>
-          <div className="cloud-grid">
+          <div className="cloud-image-grid">
             {resourceClouds.map((group) => (
-              <div key={group.title} className="cloud-panel">
-                <strong>{group.title}</strong>
-                <div className="keyword-cloud small">
-                  {group.words.map((word, index) => (
-                    <span key={word} className={`keyword-pill size-${(index % 3) + 1}`}>{word}</span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="table-spacer">
-            <SimpleTable columns={["检索分类", "占比", "说明"]} rows={categoryRows} />
-          </div>
-        </article>
-      </section>
-
-      <section className="content-grid analysis-main">
-        <article className="panel">
-          <div className="panel-header">
-            <h2>纠错与反馈闭环分析</h2>
-            <button type="button" className="text-button">提交量 / 积压量 / 闭环率</button>
-          </div>
-          <div className="metric-ribbon compact">
-            {governanceCards.map((item) => (
-              <div key={item.label} className="metric-ribbon-item">
-                <strong>{item.label}</strong>
-                <div className="metric-ribbon-top"><span>{item.value}</span></div>
-                <p>{item.note}</p>
-              </div>
-            ))}
-          </div>
-          <div className="grouped-trend-chart compact">
-            {governanceTrend.map((item) => (
-              <div key={item.label} className="trend-group">
-                <div className="trend-bars">
-                  <div className="trend-bar correction" style={{ height: `${item.correction}%` }} />
-                  <div className="trend-bar feedback" style={{ height: `${item.feedback}%` }} />
-                  <div className="trend-bar backlog" style={{ height: `${item.backlog}%` }} />
-                </div>
-                <span>{item.label}</span>
-              </div>
-            ))}
-          </div>
-          <div className="legend-row">
-            <span><i className="legend-dot correction" />纠错提交</span>
-            <span><i className="legend-dot feedback" />反馈提交</span>
-            <span><i className="legend-dot backlog" />待处理积压</span>
-          </div>
-          <div className="table-spacer">
-            <SimpleTable columns={["问题类型", "待处理", "说明"]} rows={governanceRows} />
-          </div>
-        </article>
-
-        <article className="panel">
-          <div className="panel-header">
-            <h2>分析结论与建议</h2>
-            <button type="button" className="text-button">面向运营</button>
-          </div>
-          <div className="insight-grid">
-            {insightBlocks.map((block) => (
-              <div key={block.title} className="insight-card">
-                <strong>{block.title}</strong>
-                <ul>
-                  {block.items.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
+              <div key={group.title} className="cloud-image-card">
+                <strong className="cloud-image-title">{group.title}</strong>
+                <img className="cloud-image" src={group.image} alt={`${group.title}词云`} />
               </div>
             ))}
           </div>
