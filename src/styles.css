@@ -2209,8 +2209,13 @@ select {
 }
 
 .table-shell.selectable {
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.ops-table-shell {
+  height: 100%;
 }
 
 .table-row {

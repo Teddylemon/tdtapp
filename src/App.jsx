@@ -4033,7 +4033,13 @@ function OpsPage() {
         }
         footer={<Pagination currentPage={page} totalPages={8} totalLabel="共 128 条" onChangePage={setPage} />}
       >
-        <SimpleTable columns={["时间", "级别", "来源", "内容"]} rows={logRows} rowClassName="four" />
+        <SimpleTable
+          columns={["时间", "级别", "来源", "内容"]}
+          rows={logRows}
+          rowClassName="four"
+          scrollable
+          tableClassName="ops-table-shell"
+        />
       </ListShell>
     </div>
   );
@@ -4158,11 +4164,14 @@ function Pagination({
   );
 }
 
-function SimpleTable({ columns, rows, rowClassName }) {
+function SimpleTable({ columns, rows, rowClassName, scrollable = false, tableClassName = "" }) {
   const columnsClass = rowClassName ?? `cols-${columns.length}`;
+  const shellClassName = ["table-shell", scrollable ? "selectable" : "", tableClassName]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div className="table-shell">
+    <div className={shellClassName}>
       <div className={`table-row table-head ${columnsClass}`}>
         {columns.map((column) => (
           <span key={column}>{column}</span>
