@@ -2,23 +2,47 @@
   background: transparent;
 }
 
+.release-page .list-shell-top,
+.release-page .list-shell-filters,
 .release-page .list-shell-footer {
   flex: 0 0 auto;
 }
 
 .release-list-shell {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  min-height: 0;
 }
 
 .release-filter-cluster .filter-select-shell {
   min-width: 148px;
 }
 
-.release-table-shell {
+.release-table-scroll {
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: #fffdfa;
+}
+
+.release-page .release-table-shell {
+  height: 100%;
+  overflow: auto;
+  border-color: #ebe4da;
+  background: #fffdfa;
+}
+
+.release-table-shell .table-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  box-shadow: inset 0 -1px 0 #f0ebe5;
+}
+
+.release-table-shell .table-row:not(.table-head) {
+  background: #fffdfa;
+}
+
+.release-table-shell .table-row:not(.table-head):hover {
+  background: #faf8f4;
 }
 
 .release-cols {
@@ -204,6 +228,12 @@
 
   .release-detail-sections {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1680px) {
+  .release-cols {
+    grid-template-columns: 140px minmax(280px, 1.6fr) 156px 118px 104px;
   }
 }
 

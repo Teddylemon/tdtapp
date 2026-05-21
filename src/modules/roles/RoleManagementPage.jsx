@@ -286,7 +286,8 @@ export default function RoleManagementPage() {
         </div>
 
         <div className="list-shell-body">
-          <div className="table-shell role-table-shell">
+          <div className="role-table-scroll">
+            <div className="table-shell selectable role-table-shell">
             <div className="table-row table-head role-cols">
               <span>用户ID</span>
               <span>昵称</span>
@@ -325,6 +326,7 @@ export default function RoleManagementPage() {
             {pagedUsers.length === 0 ? (
               <div className="role-empty">当前筛选条件下没有用户记录</div>
             ) : null}
+          </div>
           </div>
         </div>
 

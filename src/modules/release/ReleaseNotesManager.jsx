@@ -271,7 +271,8 @@ export default function ReleaseNotesManager() {
         </div>
 
         <div className="list-shell-body">
-          <div className="table-shell release-table-shell">
+          <div className="release-table-scroll">
+            <div className="table-shell selectable release-table-shell">
             <div className="table-row table-head release-cols">
               <span>版本号</span>
               <span>更新摘要</span>
@@ -314,6 +315,7 @@ export default function ReleaseNotesManager() {
             {pagedReleases.length === 0 ? (
               <div className="release-empty">当前没有符合条件的版本记录</div>
             ) : null}
+          </div>
           </div>
         </div>
 

@@ -4,6 +4,8 @@ dist/
 Thumbs.db
 
 tmp-exports/
+exports/
+tmp-*.txt
 images/
 参考ppt/
 技术文档/

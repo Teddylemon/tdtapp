@@ -82,6 +82,8 @@ const reviewImageMap = Object.fromEntries(
 
 const topicMapStorageKey = "tdt-topic-map-publish-status";
 const reviewStorageKey = "tdt-mobile-submission-review-state";
+const TOPIC_STATUS_UNPUBLISHED = "未上架";
+const TOPIC_STATUS_PUBLISHED = "已上架";
 
 const flattenedMenuItems = menuItems.flatMap((item) =>
   item.children ? [item, ...item.children] : [item],
@@ -240,6 +242,7 @@ const topicMapBaseRecords = [
   },
 ].map((item) => ({
   ...item,
+  status: item.status === "已上架" ? TOPIC_STATUS_PUBLISHED : TOPIC_STATUS_UNPUBLISHED,
   thumbnail: topicMapImageMap[item.imageKey] ?? "",
 }));
 
@@ -261,8 +264,8 @@ const trendData = [
 ];
 
 const analysisOverviewCards = [
-  { label: "DAU", value: "31,284", note: "较昨日 +6.8%" },
-  { label: "MAU", value: "286,410", note: "较上月 +12.4%" },
+  { label: "DAU", value: "3,128", note: "较昨日 +6.8%" },
+  { label: "MAU", value: "2,864", note: "较上月 +12.4%" },
   { label: "留存率", value: "43.6%", note: "7日留存较上周 +2.1%" },
   { label: "系统总用户量", value: "1,248,630", note: "累计注册较上月 +5.7%" },
 ];
@@ -959,12 +962,18 @@ function readStoredTopicStatuses() {
   }
 }
 
+function normalizeTopicStatus(status) {
+  return status === TOPIC_STATUS_PUBLISHED || status === "已上架"
+    ? TOPIC_STATUS_PUBLISHED
+    : TOPIC_STATUS_UNPUBLISHED;
+}
+
 function useTopicMapRecords() {
   const [records, setRecords] = useState(() => {
     const stored = readStoredTopicStatuses();
     return topicMapBaseRecords.map((item) => ({
       ...item,
-      status: stored[item.id]?.status ?? item.status,
+      status: normalizeTopicStatus(stored[item.id]?.status ?? item.status),
       updatedAt: stored[item.id]?.updatedAt ?? item.updatedAt,
     }));
   });
@@ -972,7 +981,10 @@ function useTopicMapRecords() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const payload = Object.fromEntries(
-      records.map((item) => [item.id, { status: item.status, updatedAt: item.updatedAt }]),
+      records.map((item) => [
+        item.id,
+        { status: normalizeTopicStatus(item.status), updatedAt: item.updatedAt },
+      ]),
     );
     window.localStorage.setItem(topicMapStorageKey, JSON.stringify(payload));
   }, [records]);
@@ -981,17 +993,17 @@ function useTopicMapRecords() {
 }
 
 function nextTopicStatus(targetStatus) {
-  return targetStatus === "已上架" ? "已下架" : "已上架";
+  return normalizeTopicStatus(targetStatus) === TOPIC_STATUS_PUBLISHED
+    ? TOPIC_STATUS_UNPUBLISHED
+    : TOPIC_STATUS_PUBLISHED;
 }
 
 function topicActionLabel(status) {
-  return status === "已上架" ? "下架" : "上架";
+  return normalizeTopicStatus(status) === TOPIC_STATUS_PUBLISHED ? "下架" : "上架";
 }
 
 function topicStatusTone(status) {
-  if (status === "已上架") return "success";
-  if (status === "已下架") return "muted";
-  return "pending";
+  return normalizeTopicStatus(status) === TOPIC_STATUS_PUBLISHED ? "success" : "muted";
 }
 
 function readStoredFeedbackStates() {
@@ -2737,10 +2749,10 @@ function TopicPage() {
       acc[item.status] = (acc[item.status] ?? 0) + 1;
       return acc;
     },
-    { "待审核": 0, "已上架": 0, "已下架": 0 },
+    { [TOPIC_STATUS_UNPUBLISHED]: 0, [TOPIC_STATUS_PUBLISHED]: 0 },
   );
 
-  const topicStatusOptions = ["待审核", "已上架", "已下架"].map(
+  const topicStatusOptions = [TOPIC_STATUS_UNPUBLISHED, TOPIC_STATUS_PUBLISHED].map(
     (status) => `${status} ${topicStatusCounts[status] ?? 0}`,
   );
 
@@ -2835,7 +2847,7 @@ function TopicPage() {
             <button
               type="button"
               className="ghost-button slim-button"
-              onClick={() => handleBatchToggle("已下架")}
+              onClick={() => handleBatchToggle(TOPIC_STATUS_UNPUBLISHED)}
               disabled={selectedIds.length === 0}
             >
               <span>批量下架</span>
@@ -2843,7 +2855,7 @@ function TopicPage() {
             <button
               type="button"
               className="ghost-button slim-button"
-              onClick={() => handleBatchToggle("已上架")}
+              onClick={() => handleBatchToggle(TOPIC_STATUS_PUBLISHED)}
               disabled={selectedIds.length === 0}
             >
               <span>批量上架</span>
@@ -2910,10 +2922,10 @@ function TopicPage() {
                   </button>
                   <button
                     type="button"
-                    className={`inline-button action-publish ${record.status === "已上架" ? "danger-button" : ""}`}
+                    className={`inline-button action-publish ${record.status === TOPIC_STATUS_PUBLISHED ? "danger-button" : ""}`}
                     onClick={() => handleSingleToggle(record)}
                   >
-                    <ButtonIcon type={record.status === "已上架" ? "down" : "up"} />
+                    <ButtonIcon type={record.status === TOPIC_STATUS_PUBLISHED ? "down" : "up"} />
                     <span>{topicActionLabel(record.status)}</span>
                   </button>
                 </span>
@@ -2962,8 +2974,8 @@ function TopicDetailPage() {
           </div>
         </div>
         <div className="topic-detail-toolbar">
-          <button type="button" className={record.status === "已上架" ? "ghost-button slim-button" : "primary-button slim-button"} onClick={toggleStatus}>
-            <ButtonIcon type={record.status === "已上架" ? "down" : "up"} />
+          <button type="button" className={record.status === TOPIC_STATUS_PUBLISHED ? "ghost-button slim-button" : "primary-button slim-button"} onClick={toggleStatus}>
+            <ButtonIcon type={record.status === TOPIC_STATUS_PUBLISHED ? "down" : "up"} />
             <span>{topicActionLabel(record.status)}</span>
           </button>
         </div>
