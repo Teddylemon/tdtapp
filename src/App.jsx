@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CircleMarker, MapContainer, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
 import {
-  BrowserRouter,
+  HashRouter,
   Navigate,
   NavLink,
   Outlet,
@@ -1423,7 +1423,7 @@ const systemTables = {
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<Navigate to="/analysis" replace />} />
         <Route element={<AppLayoutShell />}>
@@ -1441,7 +1441,7 @@ function App() {
           <Route path="/system/:tab" element={<RoleManagementPageModule />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
