@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ButtonIcon,
@@ -24,15 +24,21 @@ import {
   getCountyOptions,
   readUserRecords,
 } from "../_shared/userDirectory";
+import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip, useMap } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import {
+  PieChart, Pie, Cell, Tooltip as RechartsTooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer,
+  AreaChart, Area,
+} from "recharts";
 import "./tasks.css";
 
-const storageKey = "tdt-task-dispatch-state-v3";
+const storageKey = "tdt-task-dispatch-state-v6";
 
 const TASK_STATUS = {
   DRAFT: "草稿",
-  PENDING_ASSIGN: "待市级分派",
+  DISPATCHED: "已下发",
   IN_PROGRESS: "核查中",
-  SUBMITTED: "已提交待更新",
   DONE: "已完成",
 };
 
@@ -81,11 +87,18 @@ function createSourceFileRecord(file, areaCount) {
   };
 }
 
+function createMockSourceFiles() {
+  const ts = Date.now();
+  return [
+    { id: `mock-01-${ts}`, name: "武汉市2026年5月卫星遥感变化图斑.shp", size: 215040, sizeLabel: "210 KB", plotCount: 48 },
+  ];
+}
+
 function summarizeSourceFiles(sourceFiles) {
   if (!sourceFiles.length) return "-";
   if (sourceFiles.length === 1) return `${sourceFiles[0].name} · ${sourceFiles[0].plotCount} 个图斑`;
   const totalPlots = sourceFiles.reduce((sum, item) => sum + item.plotCount, 0);
-  return `${sourceFiles.length} 个 SHP 文件 · 约 ${totalPlots} 个图斑`;
+  return `${sourceFiles.length} 个 SHP 文件 · ${totalPlots} 个图斑`;
 }
 
 function getProgressPercent(completedPlots, plotCount) {
@@ -101,6 +114,154 @@ function getTaskProgressSummary(task) {
     percentText: `${progressPercent}%`,
     progressPercent,
     remaining,
+  };
+}
+
+function getMockInProgressCompletedPlots(plotCount, seedText) {
+  if (!plotCount) return 0;
+  if (plotCount === 1) return 1;
+
+  const seed = Array.from(seedText || "").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const percent = 30 + (seed % 41);
+  return Math.min(plotCount - 1, Math.max(1, Math.round((plotCount * percent) / 100)));
+}
+
+function normalizeTaskStatus(status, completedPlots, plotCount) {
+  if (statusOptions.includes(status)) return status;
+
+  if (["待市级分派", "待分派", "待核查"].includes(status)) {
+    return TASK_STATUS.DISPATCHED;
+  }
+
+  if (["已提交待更新", "待更新平台", "已回传待更新"].includes(status)) {
+    return completedPlots >= plotCount ? TASK_STATUS.DONE : TASK_STATUS.IN_PROGRESS;
+  }
+
+  if (status === "已提交") {
+    return completedPlots >= plotCount ? TASK_STATUS.DONE : TASK_STATUS.IN_PROGRESS;
+  }
+
+  return TASK_STATUS.DRAFT;
+}
+
+function normalizeCompletedPlots(task, normalizedStatus) {
+  if (normalizedStatus === TASK_STATUS.DRAFT || normalizedStatus === TASK_STATUS.DISPATCHED) return 0;
+  if (normalizedStatus === TASK_STATUS.DONE) return task.plotCount;
+
+  if (task.completedPlots > 0 && task.completedPlots < task.plotCount) {
+    return task.completedPlots;
+  }
+
+  return getMockInProgressCompletedPlots(task.plotCount, task.id);
+}
+
+function distributeCompletedPlots(inspectors, totalCompleted) {
+  if (!inspectors.length) return [];
+
+  const totalPlots = inspectors.reduce((sum, inspector) => sum + inspector.plots, 0);
+  if (!totalPlots || totalCompleted <= 0) {
+    return inspectors.map(() => 0);
+  }
+
+  if (totalCompleted >= totalPlots) {
+    return inspectors.map((inspector) => inspector.plots);
+  }
+
+  const allocations = inspectors.map((inspector) => Math.min(inspector.plots, Math.floor((totalCompleted * inspector.plots) / totalPlots)));
+  let assigned = allocations.reduce((sum, completed) => sum + completed, 0);
+  let cursor = 0;
+
+  while (assigned < totalCompleted) {
+    const index = cursor % inspectors.length;
+    if (allocations[index] < inspectors[index].plots) {
+      allocations[index] += 1;
+      assigned += 1;
+    }
+    cursor += 1;
+  }
+
+  return allocations;
+}
+
+function normalizeInspectors(inspectors, normalizedStatus, completedPlots) {
+  const completedByInspector = distributeCompletedPlots(inspectors, completedPlots);
+
+  return inspectors.map((inspector, index) => {
+    if (normalizedStatus === TASK_STATUS.DRAFT) {
+      return { ...inspector, completed: 0, status: "待接收" };
+    }
+
+    if (normalizedStatus === TASK_STATUS.DISPATCHED) {
+      return { ...inspector, completed: 0, status: "待核查" };
+    }
+
+    if (normalizedStatus === TASK_STATUS.DONE) {
+      return { ...inspector, completed: inspector.plots, status: "已完成" };
+    }
+
+    const completed = Math.min(inspector.plots, completedByInspector[index] ?? 0);
+    return {
+      ...inspector,
+      completed,
+      status: completed <= 0 ? "待核查" : completed >= inspector.plots ? "已提交" : "核查中",
+    };
+  });
+}
+
+function normalizePlots(plots, normalizedStatus) {
+  const plotStatus =
+    normalizedStatus === TASK_STATUS.DRAFT
+      ? TASK_STATUS.DRAFT
+      : normalizedStatus === TASK_STATUS.DISPATCHED
+        ? "待核查"
+        : normalizedStatus === TASK_STATUS.IN_PROGRESS
+          ? "核查中"
+          : "已完成";
+
+  return plots.map((plot) => ({ ...plot, status: plotStatus }));
+}
+
+function buildTaskProgressNote(status, completedPlots, plotCount) {
+  if (status === TASK_STATUS.DRAFT) {
+    return "任务草稿已生成，已绑定下发区域、SHP 图斑来源和执行人员。";
+  }
+
+  if (status === TASK_STATUS.DISPATCHED) {
+    return "任务已下发至执行用户，等待开始核查。";
+  }
+
+  if (status === TASK_STATUS.IN_PROGRESS) {
+    return `执行用户正在核查中，已完成 ${completedPlots} / ${plotCount} 个图斑。`;
+  }
+
+  return "核查结果已统一回写图斑库，任务链路已闭环。";
+}
+
+function normalizeTaskRecord(task) {
+  const normalizedStatus = normalizeTaskStatus(task.status, task.completedPlots, task.plotCount);
+  const completedPlots = normalizeCompletedPlots(task, normalizedStatus);
+  const inspectors = normalizeInspectors(task.inspectors || [], normalizedStatus, completedPlots);
+  const plots = normalizePlots(task.plots || [], normalizedStatus);
+  const managerNames = task.managerNames || [];
+  const assigneeCount = inspectors.length || task.assigneeCount || 0;
+
+  return {
+    ...task,
+    status: normalizedStatus,
+    completedPlots,
+    submittedAt: normalizedStatus === TASK_STATUS.DONE ? task.submittedAt : "-",
+    platformUpdatedAt: normalizedStatus === TASK_STATUS.DONE ? task.platformUpdatedAt : "-",
+    progressNote: buildTaskProgressNote(normalizedStatus, completedPlots, task.plotCount),
+    cityAssignments: buildCityAssignments({
+      status: normalizedStatus,
+      managerNames,
+      assigneeCount,
+      plotCount: task.plotCount,
+      completedPlots,
+      targetAreaSummary: task.targetAreaSummary,
+    }),
+    inspectors,
+    plots,
   };
 }
 
@@ -149,48 +310,40 @@ function buildCityAssignments({
     {
       role: "市级管理员",
       owner: managerSummary,
-      status:
-        status === TASK_STATUS.DRAFT
-          ? "未接收"
-          : status === TASK_STATUS.PENDING_ASSIGN
-            ? "待分派"
-            : "已接收",
+      status: status === TASK_STATUS.DRAFT ? "待下发" : "已接收",
       note:
         status === TASK_STATUS.DRAFT
           ? "草稿阶段已预设承接管理员"
-          : status === TASK_STATUS.PENDING_ASSIGN
-            ? "等待市级管理员确认并分派图斑"
-            : `已完成市级统筹，关联 ${inspectorSummary}`,
+          : `已完成市级统筹，关联 ${inspectorSummary}`,
     },
     {
-      role: "市级个人用户",
+      role: "执行用户",
       owner: inspectorSummary,
       status:
-        status === TASK_STATUS.DRAFT || status === TASK_STATUS.PENDING_ASSIGN
+        status === TASK_STATUS.DRAFT
           ? "未下发"
-          : status === TASK_STATUS.IN_PROGRESS
-            ? "核查中"
-            : "已提交",
+          : status === TASK_STATUS.DISPATCHED
+            ? "待核查"
+            : status === TASK_STATUS.IN_PROGRESS
+              ? "核查中"
+              : "已完成",
       note:
-        status === TASK_STATUS.DRAFT || status === TASK_STATUS.PENDING_ASSIGN
-          ? `待个人用户接收，预计核查 ${plotCount} 个图斑`
-          : `${completedPlots} / ${plotCount} 个图斑已完成核查`,
+        status === TASK_STATUS.DRAFT
+          ? `待下发后接收图斑，预计核查 ${plotCount} 个图斑`
+          : status === TASK_STATUS.DISPATCHED
+            ? "任务已下发，等待执行用户开始核查"
+            : status === TASK_STATUS.IN_PROGRESS
+              ? `${completedPlots} / ${plotCount} 个图斑已完成核查`
+              : `${completedPlots} / ${plotCount} 个图斑已核查`,
     },
     {
       role: "平台回写",
       owner: "省级任务中心",
-      status:
-        status === TASK_STATUS.SUBMITTED
-          ? "待更新"
-          : status === TASK_STATUS.DONE
-            ? "已更新"
-            : "未开始",
+      status: status === TASK_STATUS.DONE ? "已更新" : "未开始",
       note:
-        status === TASK_STATUS.SUBMITTED
-          ? "等待 Web 后台统一回写图斑库"
-          : status === TASK_STATUS.DONE
-            ? "平台图斑状态与核查结论已同步"
-            : "执行结果回传后统一更新",
+        status === TASK_STATUS.DONE
+          ? "平台图斑状态与核查结论已同步"
+          : "核查完成后统一回写图斑库",
     },
   ];
 }
@@ -198,7 +351,7 @@ function buildCityAssignments({
 function taskStatusTone(status) {
   if (status === TASK_STATUS.DONE) return "success";
   if (status === TASK_STATUS.IN_PROGRESS) return "info";
-  if (status === TASK_STATUS.SUBMITTED) return "pending";
+  if (status === TASK_STATUS.DISPATCHED) return "pending";
   return "muted";
 }
 
@@ -238,24 +391,26 @@ function buildSamplePlots({ selectedAreaKeys, plotCount, inspectors, status }) {
   }));
 }
 
-function createTaskFromDraft(draft, users) {
+function createTaskFromDraft(draft, users, submitMode = "draft") {
   const selectedManagers = users.filter((user) => draft.managerIds.includes(user.id));
   const selectedInspectors = users.filter((user) => draft.inspectorIds.includes(user.id));
   const plotCount = draft.sourceFiles.reduce((sum, file) => sum + file.plotCount, 0);
-  const basePlotsPerInspector = selectedInspectors.length ? Math.floor(plotCount / selectedInspectors.length) : 0;
-  const remainingPlots = selectedInspectors.length ? plotCount % selectedInspectors.length : 0;
+  const plotAllocations = draft.plotAllocations || {};
+  const isDispatchMode = submitMode === "dispatch";
   const inspectorAssignments = selectedInspectors.map((user, index) => ({
     id: user.id,
     name: user.nickname,
     county: user.county,
     role: user.role,
-    plots: basePlotsPerInspector + (index < remainingPlots ? 1 : 0),
+    plots: plotAllocations[user.id] || (Math.floor(plotCount / selectedInspectors.length) + (index < (plotCount % selectedInspectors.length) ? 1 : 0)),
     completed: 0,
-    status: "待接收",
+    status: isDispatchMode ? "待核查" : "待接收",
   }));
   const nextId = `TASK-${String(Date.now()).slice(-6)}`;
   const targetAreaSummary = summarizeAreaKeys(draft.selectedAreaKeys);
   const managerNames = selectedManagers.map((user) => user.nickname);
+  const nextStatus = isDispatchMode ? TASK_STATUS.DISPATCHED : TASK_STATUS.DRAFT;
+  const dispatchedAt = isDispatchMode ? formatTimestamp(new Date()) : "-";
 
   return {
     id: nextId,
@@ -276,17 +431,17 @@ function createTaskFromDraft(draft, users) {
     completedPlots: 0,
     assigneeCount: selectedInspectors.length,
     deadline: draft.deadline.replace("T", " "),
-    status: TASK_STATUS.DRAFT,
+    status: nextStatus,
     createdAt: formatTimestamp(new Date()),
-    dispatchedAt: "-",
+    dispatchedAt,
     submittedAt: "-",
     platformUpdatedAt: "-",
     requirement:
       draft.requirement.trim() ||
       "执行用户需逐图斑完成现场核查，填写核查结论、现场说明、定位信息，并上传佐证照片后统一提交。",
-    progressNote: "任务草稿已生成，已绑定下发区域、SHP 图斑来源和执行人员。",
+    progressNote: buildTaskProgressNote(nextStatus, 0, plotCount),
     cityAssignments: buildCityAssignments({
-      status: TASK_STATUS.DRAFT,
+      status: nextStatus,
       managerNames,
       assigneeCount: selectedInspectors.length,
       plotCount,
@@ -298,7 +453,7 @@ function createTaskFromDraft(draft, users) {
       selectedAreaKeys: draft.selectedAreaKeys,
       plotCount,
       inspectors: inspectorAssignments,
-      status: TASK_STATUS.DRAFT,
+      status: isDispatchMode ? "待核查" : TASK_STATUS.DRAFT,
     }),
   };
 }
@@ -360,11 +515,11 @@ function createSeedTask(config, users) {
       status:
         config.status === TASK_STATUS.DRAFT
           ? TASK_STATUS.DRAFT
-          : config.status === TASK_STATUS.PENDING_ASSIGN
+          : config.status === TASK_STATUS.DISPATCHED
             ? "待核查"
             : config.status === TASK_STATUS.IN_PROGRESS
-              ? TASK_STATUS.IN_PROGRESS
-              : "已提交",
+              ? "核查中"
+              : "已完成",
     }),
   };
 }
@@ -412,7 +567,7 @@ function buildInitialTasks(users) {
         id: "TASK-002",
         title: "襄阳市 4 月耕地变化图斑核查",
         description:
-          "围绕耕地变化图斑开展抽样核查，市级个人用户已提交整包结果，等待 Web 后台统一更新。",
+          "围绕耕地变化图斑开展抽样核查，核查结果已回写平台并完成闭环。",
         targetAreas: [
           buildAreaKey("襄阳市", ALL_COUNTIES),
           buildAreaKey("襄阳市", "樊城区"),
@@ -430,14 +585,14 @@ function buildInitialTasks(users) {
         plotCount: 78,
         completedPlots: 78,
         deadline: "2026-05-28 12:00",
-        status: TASK_STATUS.SUBMITTED,
+        status: TASK_STATUS.DONE,
         createdAt: "2026-05-22 14:10",
         dispatchedAt: "2026-05-22 14:50",
         submittedAt: "2026-05-26 19:10",
-        platformUpdatedAt: "-",
+        platformUpdatedAt: "2026-05-27 08:30",
         requirement:
           "逐图斑确认耕地变化真实性，至少上传 2 张现场照片，并填写核查结论和补充说明。",
-        progressNote: "个人用户已提交全部图斑结果，等待平台统一更新。",
+        progressNote: "核查结果已统一回写图斑库，任务已闭环。",
       },
       users,
     ),
@@ -446,7 +601,7 @@ function buildInitialTasks(users) {
         id: "TASK-003",
         title: "宜昌市地灾点周边图斑核查",
         description:
-          "面向重点地灾点周边疑似变化图斑开展快速核查，任务已下发至市级管理员，等待确认执行名单。",
+          "面向重点地灾点周边疑似变化图斑开展快速核查，任务已下发，等待执行用户开始核查。",
         targetAreas: [
           buildAreaKey("宜昌市", ALL_COUNTIES),
           buildAreaKey("宜昌市", "西陵区"),
@@ -457,20 +612,20 @@ function buildInitialTasks(users) {
         ],
         managerIds: ["2000013"],
         inspectors: [
-          { id: "2000014", plots: 28, completed: 0, status: "待接收" },
-          { id: "2000015", plots: 26, completed: 0, status: "待接收" },
+          { id: "2000014", plots: 28, completed: 0, status: "待核查" },
+          { id: "2000015", plots: 26, completed: 0, status: "待核查" },
         ],
         plotCount: 54,
         completedPlots: 0,
         deadline: "2026-05-30 17:30",
-        status: TASK_STATUS.PENDING_ASSIGN,
+        status: TASK_STATUS.DISPATCHED,
         createdAt: "2026-05-26 08:45",
         dispatchedAt: "2026-05-26 09:10",
         submittedAt: "-",
         platformUpdatedAt: "-",
         requirement:
           "结合底图和现场信息核查地灾点周边图斑现状，重点识别边界变化与用地类型变化。",
-        progressNote: "任务已下发至市级管理员，等待确认执行用户并完成分派。",
+        progressNote: "任务已下发至执行用户，等待开始核查。",
       },
       users,
     ),
@@ -510,18 +665,30 @@ function buildInitialTasks(users) {
 }
 
 function readStoredTasks(users) {
-  if (typeof window === "undefined") return buildInitialTasks(users);
+  if (typeof window === "undefined") return buildInitialTasks(users).map(normalizeTaskRecord);
+
+  // Clear old storage keys
+  try {
+    for (let i = 1; i < 6; i++) {
+      const oldKey = `tdt-task-dispatch-state-v${i}`;
+      if (window.localStorage.getItem(oldKey)) {
+        window.localStorage.removeItem(oldKey);
+      }
+    }
+  } catch {
+    // ignore cleanup errors
+  }
 
   try {
     const stored = JSON.parse(window.localStorage.getItem(storageKey) ?? "null");
     if (Array.isArray(stored) && stored.every((item) => item?.id && item?.targetAreas && item?.sourceFiles)) {
-      return stored;
+      return stored.map(normalizeTaskRecord);
     }
   } catch {
-    return buildInitialTasks(users);
+    return buildInitialTasks(users).map(normalizeTaskRecord);
   }
 
-  return buildInitialTasks(users);
+  return buildInitialTasks(users).map(normalizeTaskRecord);
 }
 
 function useTaskRecords(roleUsers) {
@@ -546,78 +713,27 @@ function useTaskRecords(roleUsers) {
 function buildTaskPrimaryAction(task, updateTask) {
   if (task.status === TASK_STATUS.DRAFT) {
     return {
-      label: "下发",
+      label: "下发任务",
       icon: "up",
       className: "inline-button action-publish",
       onClick: () => {
         updateTask(task.id, {
-          status: TASK_STATUS.PENDING_ASSIGN,
+          status: TASK_STATUS.DISPATCHED,
+          completedPlots: 0,
           dispatchedAt: formatTimestamp(new Date()),
-          progressNote: "任务已下发到市级管理员，等待市级确认执行名单并完成分派。",
+          progressNote: buildTaskProgressNote(TASK_STATUS.DISPATCHED, 0, task.plotCount),
           cityAssignments: buildCityAssignments({
-            status: TASK_STATUS.PENDING_ASSIGN,
+            status: TASK_STATUS.DISPATCHED,
             managerNames: task.managerNames,
             assigneeCount: task.assigneeCount,
             plotCount: task.plotCount,
-            completedPlots: task.completedPlots,
+            completedPlots: 0,
             targetAreaSummary: task.targetAreaSummary,
           }),
-          plots: task.plots.map((plot) => ({ ...plot, status: "待分派" })),
+          inspectors: normalizeInspectors(task.inspectors, TASK_STATUS.DISPATCHED, 0),
+          plots: normalizePlots(task.plots, TASK_STATUS.DISPATCHED),
         });
-        showToast("任务已下发至市级管理员");
-      },
-    };
-  }
-
-  if (task.status === TASK_STATUS.PENDING_ASSIGN) {
-    return {
-      label: "标记分派",
-      icon: "sync",
-      className: "inline-button action-view",
-      onClick: () => {
-        updateTask(task.id, {
-          status: TASK_STATUS.IN_PROGRESS,
-          progressNote: "市级管理员已完成分派，个人用户开始在 App 端执行核查。",
-          cityAssignments: buildCityAssignments({
-            status: TASK_STATUS.IN_PROGRESS,
-            managerNames: task.managerNames,
-            assigneeCount: task.assigneeCount,
-            plotCount: task.plotCount,
-            completedPlots: task.completedPlots,
-            targetAreaSummary: task.targetAreaSummary,
-          }),
-          inspectors: task.inspectors.map((inspector) => ({
-            ...inspector,
-            status: inspector.completed > 0 ? "核查中" : "待核查",
-          })),
-          plots: task.plots.map((plot) => ({ ...plot, status: "待核查" })),
-        });
-        showToast("已标记为市级分派完成");
-      },
-    };
-  }
-
-  if (task.status === TASK_STATUS.SUBMITTED) {
-    return {
-      label: "更新平台",
-      icon: "sync",
-      className: "inline-button action-publish",
-      onClick: () => {
-        updateTask(task.id, {
-          status: TASK_STATUS.DONE,
-          platformUpdatedAt: formatTimestamp(new Date()),
-          progressNote: "核查结果已统一回写图斑库，任务链路已闭环。",
-          cityAssignments: buildCityAssignments({
-            status: TASK_STATUS.DONE,
-            managerNames: task.managerNames,
-            assigneeCount: task.assigneeCount,
-            plotCount: task.plotCount,
-            completedPlots: task.completedPlots,
-            targetAreaSummary: task.targetAreaSummary,
-          }),
-          plots: task.plots.map((plot) => ({ ...plot, status: "已完成" })),
-        });
-        showToast("平台图斑信息已更新");
+        showToast("任务已下发");
       },
     };
   }
@@ -683,11 +799,11 @@ export function TaskListPage() {
   const safePage = Math.min(currentPage, totalPages);
   const pageRecords = filteredRecords.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  const handleCreateTask = (draft) => {
-    const nextTask = createTaskFromDraft(draft, roleUsers);
+  const handleCreateTask = (draft, submitMode = "draft") => {
+    const nextTask = createTaskFromDraft(draft, roleUsers, submitMode);
     createTask(nextTask);
     setCreateOpen(false);
-    showToast("任务草稿已创建");
+    showToast(submitMode === "dispatch" ? "任务已保存并下发" : "任务草稿已创建");
   };
 
   return (
@@ -816,6 +932,103 @@ export function TaskListPage() {
   );
 }
 
+function MapResizeHelper() {
+  const map = useMap();
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => map.invalidateSize());
+    return () => cancelAnimationFrame(raf);
+  }, [map]);
+  return null;
+}
+
+function FlyToController({ spot }) {
+  const map = useMap();
+  useEffect(() => {
+    if (spot) {
+      map.flyTo(spot.coordinate, 16, { duration: 1 });
+    }
+  }, [map, spot]);
+  return null;
+}
+
+function generateMockSpots(task) {
+  const center = [30.5931, 114.3048];
+  const results = ["correct", "incorrect", "pending"];
+  const featureTypes = [
+    "新增建设", "疑似占地", "边界变化", "用地类型变化",
+    "耕地变化", "林地变化", "水域变化", "建设用地图斑",
+  ];
+  const files = task.sourceFiles;
+  const plotsPerFile = files.map((f, fi) => {
+    const base = Math.floor(task.plotCount / files.length);
+    const rem = task.plotCount % files.length;
+    return { fileId: f.id, count: base + (fi < rem ? 1 : 0) };
+  });
+
+  let globalIndex = 0;
+  const spots = [];
+  plotsPerFile.forEach(({ fileId, count }) => {
+    for (let j = 0; j < count; j++) {
+      const i = globalIndex++;
+      const lat = center[0] + (Math.random() - 0.5) * 0.08;
+      const lng = center[1] + (Math.random() - 0.5) * 0.12;
+      const ft = featureTypes[i % featureTypes.length];
+      const result = results[i % 3];
+      const photoCount = 1 + Math.floor(Math.random() * 3);
+      const photos = Array.from({ length: photoCount }, (_, pi) => ({
+        id: `photo-${i}-${pi}`,
+        label: `现场照片 ${pi + 1}`,
+      }));
+
+      spots.push({
+        id: `${task.id}-SPOT-${String(i + 1).padStart(3, "0")}`,
+        sourceFileId: fileId,
+        coordinate: [lat, lng],
+        featureType: ft,
+        inspectionResult: result,
+        inspectionNotes:
+          result === "incorrect"
+            ? `${ft}核查与底图不符，存在偏差`
+            : result === "pending"
+              ? "待核查确认"
+              : `${ft}核查结果与底图一致`,
+        photos,
+      });
+    }
+  });
+  return spots;
+}
+
+function generateChartData(task, spots) {
+  const resultDist = [
+    { name: "正确", value: spots.filter((s) => s.inspectionResult === "correct").length, fill: "#7d95ef" },
+    { name: "错误", value: spots.filter((s) => s.inspectionResult === "incorrect").length, fill: "#e08a6d" },
+    { name: "待核查", value: spots.filter((s) => s.inspectionResult === "pending").length, fill: "#e0c87d" },
+  ].filter((d) => d.value > 0);
+
+  const inspectorCompletion = task.inspectors.map((insp) => ({
+    name: insp.name,
+    已完成: insp.completed,
+    未完成: insp.plots - insp.completed,
+  }));
+
+  const ftMap = {};
+  spots.forEach((s) => { ftMap[s.featureType] = (ftMap[s.featureType] || 0) + 1; });
+  const featureTypeDist = Object.entries(ftMap).map(([name, value]) => ({ name, value }));
+
+  const dailyProgress = [];
+  for (let d = 6; d >= 0; d--) {
+    const date = new Date();
+    date.setDate(date.getDate() - d);
+    dailyProgress.push({
+      date: `${date.getMonth() + 1}/${date.getDate()}`,
+      完成数: Math.max(0, Math.floor(task.completedPlots / 7) + Math.floor(Math.random() * 5 - 2)),
+    });
+  }
+
+  return { resultDist, inspectorCompletion, featureTypeDist, dailyProgress };
+}
+
 export function TaskDetailPage() {
   const navigate = useNavigate();
   const { taskId } = useParams();
@@ -843,14 +1056,20 @@ export function TaskDetailPage() {
     );
   }
 
-  const detailFields = [
-    { label: "任务编号", value: task.id },
-    { label: "下发区域", value: task.targetAreaSummary },
-    { label: "图斑来源", value: task.sourceSummary },
-    { label: "指定管理员", value: task.managerSummary || "-" },
-  ];
-
   const toolbarAction = buildTaskPrimaryAction(task, updateTask);
+
+  const [activeTab, setActiveTab] = useState("detail");
+  const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
+  const [flyToSpot, setFlyToSpot] = useState(null);
+  const [spotTableFile, setSpotTableFile] = useState(null);
+  const [spotTablePage, setSpotTablePage] = useState(1);
+
+  const spots = useMemo(() => generateMockSpots(task), [task]);
+  const chartData = useMemo(() => generateChartData(task, spots), [task, spots]);
+  const mapCenter = useMemo(
+    () => (spots.length > 0 ? spots[Math.floor(spots.length / 2)].coordinate : [30.5931, 114.3048]),
+    [spots],
+  );
 
   return (
     <div className="page-content topic-detail-page task-detail-page">
@@ -882,132 +1101,344 @@ export function TaskDetailPage() {
         <p>{task.description}</p>
       </section>
 
-      <section className="topic-detail-map-shell task-detail-panel-shell">
-        <div className="task-detail-panel">
-          <div className="task-detail-body-section">
-            <div className="task-detail-info-grid">
-              {detailFields.map((field) => (
-                <InfoField key={field.label} label={field.label} value={field.value} />
-              ))}
-            </div>
+      <section className="task-detail-tabs" role="tablist" aria-label="任务详情视图">
+            <button
+              type="button"
+              className={`task-detail-tab${activeTab === "detail" ? " active" : ""}`}
+              onClick={() => setActiveTab("detail")}
+            >
+              任务详情
+            </button>
+            <button
+              type="button"
+              className={`task-detail-tab${activeTab === "result" ? " active" : ""}`}
+              onClick={() => setActiveTab("result")}
+            >
+              核查结果
+            </button>
+          </section>
 
-            <div className="task-detail-stats-row">
-              <div className="task-stat-box">
-                <div className="stat-value">{task.plotCount}</div>
-                <div className="stat-label">任务图斑</div>
-              </div>
-              <div className="task-stat-box">
-                <div className="stat-value">{task.completedPlots}</div>
-                <div className="stat-label">已核查图斑</div>
-              </div>
-              <div className="task-stat-box">
-                <div className="stat-value">{task.assigneeCount}</div>
-                <div className="stat-label">执行用户</div>
-              </div>
-              <div className="task-stat-box">
-                <div className="stat-value">{formatDate(task.deadline)}</div>
-                <div className="stat-label">截止时间</div>
-              </div>
-            </div>
-
-            <div className="task-detail-section">
-              <div className="task-section-heading">
-                <strong>任务流转</strong>
-                <span>{task.progressNote}</span>
-              </div>
-              <div className="task-stage-grid">
-                {task.cityAssignments.map((item) => (
-                  <div key={item.role} className="task-stage-card">
-                    <span className="task-stage-role">{item.role}</span>
-                    <strong>{item.owner}</strong>
-                    <span className={`status-pill ${assignmentTone(item.status)}`}>{item.status}</span>
-                    <em>{item.note}</em>
+          {activeTab === "detail" ? (
+            <div className="task-detail-main-grid">
+              <div className="task-detail-form">
+                <div className="task-detail-form-group">
+                  <label className="task-detail-form-label">任务名称</label>
+                  <div className="task-detail-form-value">{task.title}</div>
+                </div>
+                <div className="task-detail-form-group">
+                  <label className="task-detail-form-label">截止时间</label>
+                  <div className="task-detail-form-value">{formatDate(task.deadline)}</div>
+                </div>
+                <div className="task-detail-form-group">
+                  <label className="task-detail-form-label">图斑数据</label>
+                  <div className="task-detail-form-value">
+                    {task.sourceFiles.map((file, i) => (
+                      <span key={file.id}>{i > 0 ? "；" : ""}{file.name}</span>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="task-detail-columns">
-              <div className="task-detail-section">
-                <div className="task-section-heading">
-                  <strong>执行用户</strong>
-                  <span>用户从角色管理模块拉取，按下发区域过滤后指定到本次任务</span>
                 </div>
-                <div className="task-assignment-list">
-                  {task.inspectors.map((inspector) => (
-                    <div key={inspector.id} className="task-assignment-item">
-                      <div>
-                        <strong>{inspector.name}</strong>
-                        <span>
-                          {inspector.county} · {inspector.plots} 个图斑 · 已完成 {inspector.completed}
-                        </span>
+                <div className="task-detail-form-group">
+                  <label className="task-detail-form-label">下发区域</label>
+                  <div className="task-detail-form-value">{task.targetAreaSummary}</div>
+                </div>
+                <div className="task-detail-form-group">
+                  <label className="task-detail-form-label">执行人员</label>
+                  <div className="task-detail-inspector-list">
+                    {task.inspectors.map((insp) => (
+                      <div key={insp.id} className="task-detail-inspector-row">
+                        <strong>{insp.name}</strong>
+                        <span>{insp.county}<span className="task-detail-plot-badge">图斑 {insp.plots}</span></span>
                       </div>
-                      <span className={`status-pill ${inspectorTone(inspector.status)}`}>{inspector.status}</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <div className="task-detail-section">
-                <div className="task-section-heading">
-                  <strong>SHP 图斑来源</strong>
-                  <span>任务图斑由省级统一上传，个人用户提交后等待 Web 后台统一更新</span>
+              <div className="task-detail-map-column">
+                <div className="task-leaflet-shell">
+                  <MapContainer
+                    center={mapCenter}
+                    zoom={14}
+                    className="task-leaflet-map"
+                    scrollWheelZoom
+                  >
+                    <MapResizeHelper />
+                    <FlyToController spot={flyToSpot} />
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    {spots.map((spot) => (
+                      <CircleMarker
+                        key={spot.id}
+                        center={spot.coordinate}
+                        radius={8}
+                        pathOptions={{
+                          color: "#3a3a3a",
+                          weight: 1.5,
+                          fillColor:
+                            spot.inspectionResult === "correct" ? "#7d95ef"
+                            : spot.inspectionResult === "incorrect" ? "#e08a6d"
+                            : "#e0c87d",
+                          fillOpacity: 0.9,
+                        }}
+                      >
+                        <Tooltip direction="top" offset={[0, -8]}>{spot.id}</Tooltip>
+                        <Popup maxWidth={300}>
+                          <div className="task-spot-popup">
+                            <strong>{spot.id}</strong>
+                            <div className="task-spot-popup-row"><span>要素类型</span><span>{spot.featureType}</span></div>
+                            <div className="task-spot-popup-row">
+                              <span>核查结果</span>
+                              <span className={`task-spot-result-tag ${spot.inspectionResult}`}>
+                                {spot.inspectionResult === "correct" ? "正确" : spot.inspectionResult === "incorrect" ? "错误" : "待核查"}
+                              </span>
+                            </div>
+                            <div className="task-spot-popup-row"><span>核查备注</span><span>{spot.inspectionNotes}</span></div>
+                          </div>
+                        </Popup>
+                      </CircleMarker>
+                    ))}
+                  </MapContainer>
                 </div>
-                <div className="task-source-list">
+
+                <div className="task-map-legend">
+                  <div className="task-legend-title">图斑图例</div>
+                  <div className="task-legend-item">
+                    <span className="task-legend-dot" style={{ background: "#7d95ef" }} />
+                    <span>核查正确</span>
+                  </div>
+                  <div className="task-legend-item">
+                    <span className="task-legend-dot" style={{ background: "#e08a6d" }} />
+                    <span>核查错误</span>
+                  </div>
+                  <div className="task-legend-item">
+                    <span className="task-legend-dot" style={{ background: "#e0c87d" }} />
+                    <span>待核查</span>
+                  </div>
+                  <div className="task-legend-divider" />
+                  <div className="task-legend-title">SHP 来源</div>
                   {task.sourceFiles.map((file) => (
-                    <div key={file.id} className="task-source-item">
-                      <div>
-                        <strong>{file.name}</strong>
-                        <span>{file.sizeLabel} · 约 {file.plotCount} 个图斑</span>
+                    <div
+                      key={file.id}
+                      className="task-legend-shp"
+                      onClick={() => { setSpotTableFile(file); setSpotTablePage(1); }}
+                    >
+                      <div className="task-legend-item">
+                        <span className="task-legend-file">{file.name}</span>
+                        <span className="task-legend-icon">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                        </span>
+                        <span className="task-legend-count">{file.plotCount} 图斑</span>
                       </div>
-                      <span className="task-source-chip">SHP</span>
                     </div>
                   ))}
+                </div>
+
+                <div className="task-photo-viewer">
+                  <button
+                    type="button"
+                    className="task-photo-toggle"
+                    onClick={() => setPhotoViewerOpen((prev) => !prev)}
+                    aria-label="查看核查照片"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  </button>
+                  {photoViewerOpen ? (
+                    <div className="task-photo-panel">
+                      <div className="task-photo-panel-head">
+                        <strong>核查照片</strong>
+                        <button type="button" className="task-photo-close" onClick={() => setPhotoViewerOpen(false)}>&times;</button>
+                      </div>
+                      <div className="task-photo-grid">
+                        {spots.flatMap((spot) =>
+                          spot.photos.map((photo) => (
+                            <button
+                              key={photo.id}
+                              type="button"
+                              className="task-photo-thumb"
+                              onClick={() => setFlyToSpot(spot)}
+                              title={`${spot.id} - ${photo.label}`}
+                            >
+                              <div className="task-photo-placeholder">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a8176" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                <span>{photo.label}</span>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
-
-            <div className="task-detail-columns">
-              <div className="task-detail-section">
-                <div className="task-section-heading">
-                  <strong>图斑样例进度</strong>
-                  <span>用于展示任务包内的示例图斑状态</span>
+          ) : (
+            <div className="task-detail-chart-shell">
+              <div className="task-chart-grid">
+                <div className="task-chart-card">
+                  <div className="task-chart-head">
+                    <strong>核查结果分布</strong>
+                    <span>正确 / 错误 / 待核查占比</span>
+                  </div>
+                  <div className="task-chart-body">
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart>
+                        <Pie
+                          data={chartData.resultDist}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={45}
+                          outerRadius={85}
+                          label={({ name, value }) => `${name} ${value}`}
+                        >
+                          {chartData.resultDist.map((entry, idx) => (
+                            <Cell key={idx} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-                <div className="task-plot-list">
-                  {task.plots.map((plot) => (
-                    <div key={plot.id} className="task-plot-item">
-                      <div>
-                        <strong>{plot.name}</strong>
-                        <span>{plot.id}</span>
-                      </div>
-                      <div className="task-plot-meta">
-                        <span>{plot.owner}</span>
-                        <span className={`status-pill ${assignmentTone(plot.status)}`}>{plot.status}</span>
-                      </div>
-                    </div>
-                  ))}
+
+                <div className="task-chart-card">
+                  <div className="task-chart-head">
+                    <strong>执行用户完成进度</strong>
+                    <span>已完成 / 未完成图斑数</span>
+                  </div>
+                  <div className="task-chart-body">
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={chartData.inspectorCompletion} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0ebe2" />
+                        <XAxis type="number" tick={{ fontSize: 11 }} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={60} />
+                        <RechartsTooltip />
+                        <Bar dataKey="已完成" stackId="a" fill="#7d95ef" radius={[0, 0, 4, 4]} />
+                        <Bar dataKey="未完成" stackId="a" fill="#e6dfd5" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="task-chart-card">
+                  <div className="task-chart-head">
+                    <strong>要素类型分布</strong>
+                    <span>各类型图斑数量统计</span>
+                  </div>
+                  <div className="task-chart-body">
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={chartData.featureTypeDist}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0ebe2" />
+                        <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" height={60} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <RechartsTooltip />
+                        <Bar dataKey="value" fill="#7d95ef" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="task-chart-card">
+                  <div className="task-chart-head">
+                    <strong>每日核查进度</strong>
+                    <span>近 7 天完成图斑趋势</span>
+                  </div>
+                  <div className="task-chart-body">
+                    <ResponsiveContainer width="100%" height={240}>
+                      <AreaChart data={chartData.dailyProgress}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0ebe2" />
+                        <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <RechartsTooltip />
+                        <Area
+                          type="monotone"
+                          dataKey="完成数"
+                          stroke="#7d95ef"
+                          fill="#7d95ef"
+                          fillOpacity={0.16}
+                          strokeWidth={2}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
+            </div>
+          )}
+      {spotTableFile ? (() => {
+        const fileSpots = spots.filter((s) => s.sourceFileId === spotTableFile.id);
+        const PAGE_SIZE = 12;
+        const totalPages = Math.max(1, Math.ceil(fileSpots.length / PAGE_SIZE));
+        const safePage = Math.min(spotTablePage, totalPages);
+        const pageSpots = fileSpots.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-              <div className="task-detail-section">
-                <div className="task-section-heading">
-                  <strong>核查要求</strong>
-                  <span>该内容会同步到 App 端个人用户，作为现场执行说明</span>
-                </div>
-                <div className="task-requirement-card">
-                  <p>{task.requirement}</p>
-                  <div className="task-requirement-meta">
-                    <span>创建时间：{formatDate(task.createdAt) || "-"}</span>
-                    <span>下发时间：{formatDate(task.dispatchedAt) || "-"}</span>
-                    <span>回传时间：{formatDate(task.submittedAt) || "-"}</span>
-                    <span>平台更新时间：{formatDate(task.platformUpdatedAt) || "-"}</span>
-                  </div>
+        return (
+          <div className="export-modal-overlay" onClick={() => setSpotTableFile(null)}>
+            <div className="export-modal-card task-spot-table-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="export-modal-header">
+                <h3>{spotTableFile.name}</h3>
+                <button type="button" className="export-modal-close" onClick={() => setSpotTableFile(null)}>×</button>
+              </div>
+              <div className="task-spot-table-scroll">
+                <table className="task-spot-table">
+                  <thead>
+                    <tr>
+                      <th>图斑 ID</th>
+                      <th>地物类型</th>
+                      <th>坐标（纬度, 经度）</th>
+                      <th>核查结果</th>
+                      <th>核查备注</th>
+                      <th>照片数</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageSpots.map((spot) => (
+                      <tr key={spot.id}>
+                        <td className="task-spot-table-id">{spot.id}</td>
+                        <td>{spot.featureType}</td>
+                        <td className="task-spot-table-coord">{spot.coordinate[0].toFixed(4)}, {spot.coordinate[1].toFixed(4)}</td>
+                        <td>
+                          <span className={`task-spot-result-tag ${spot.inspectionResult}`}>
+                            {spot.inspectionResult === "correct" ? "正确" : spot.inspectionResult === "incorrect" ? "错误" : "待核查"}
+                          </span>
+                        </td>
+                        <td className="task-spot-table-notes">{spot.inspectionNotes}</td>
+                        <td className="task-spot-table-photos">{spot.photos.length}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="task-spot-table-footer">
+                <span className="task-spot-table-total">共 {fileSpots.length} 个图斑</span>
+                <div className="task-spot-table-pager">
+                  <span className="task-spot-page-size">每页 {PAGE_SIZE} 条</span>
+                  <button
+                    type="button"
+                    className="task-pager-btn"
+                    disabled={safePage <= 1}
+                    onClick={() => setSpotTablePage(safePage - 1)}
+                  >
+                    上一页
+                  </button>
+                  <span className="task-pager-info">{safePage} / {totalPages}</span>
+                  <button
+                    type="button"
+                    className="task-pager-btn"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setSpotTablePage(safePage + 1)}
+                  >
+                    下一页
+                  </button>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        );
+      })() : null}
     </div>
   );
 }
@@ -1019,14 +1450,45 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
     title: "",
     selectedAreaKeys: [],
     deadline: "2026-06-05T18:00",
-    sourceFiles: [],
+    sourceFiles: createMockSourceFiles(),
     managerIds: [],
     inspectorIds: [],
     requirement: "",
     description: "",
   }));
   const [pickerMode, setPickerMode] = useState(null);
-  const lastAreaSignatureRef = useRef("");
+  const [plotAllocations, setPlotAllocations] = useState({});
+
+  const totalPlotEstimate = draft.sourceFiles.reduce((sum, file) => sum + file.plotCount, 0);
+
+  useEffect(() => {
+    if (!draft.inspectorIds.length || totalPlotEstimate <= 0) {
+      setPlotAllocations({});
+      return;
+    }
+    const base = Math.floor(totalPlotEstimate / draft.inspectorIds.length);
+    const remainder = totalPlotEstimate % draft.inspectorIds.length;
+    const allocations = {};
+    draft.inspectorIds.forEach((id, index) => {
+      allocations[id] = base + (index < remainder ? 1 : 0);
+    });
+    setPlotAllocations(allocations);
+  }, [draft.inspectorIds, totalPlotEstimate]);
+
+  const handlePlotAdjust = (userId, delta) => {
+    setPlotAllocations((prev) => {
+      const current = prev[userId] || 0;
+      const next = current + delta;
+      if (next < 1) return prev;
+      const otherSum = Object.entries(prev).reduce((sum, [id, count]) => {
+        return id === userId ? sum : sum + count;
+      }, 0);
+      if (otherSum + next > totalPlotEstimate) return prev;
+      return { ...prev, [userId]: next };
+    });
+  };
+
+  const allocatedTotal = Object.values(plotAllocations).reduce((sum, count) => sum + count, 0);
 
   const availableManagers = useMemo(
     () => getManagersForAreas(users, draft.selectedAreaKeys),
@@ -1040,20 +1502,14 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
 
   useEffect(() => {
     const availableManagerIds = new Set(availableManagers.map((user) => user.id));
-    const areaSignature = draft.selectedAreaKeys.slice().sort().join("|");
 
     setDraft((current) => {
-      if (lastAreaSignatureRef.current !== areaSignature) {
-        lastAreaSignatureRef.current = areaSignature;
-        return { ...current, managerIds: availableManagers.map((user) => user.id) };
-      }
-
       const nextManagerIds = current.managerIds.filter((id) => availableManagerIds.has(id));
       return nextManagerIds.length === current.managerIds.length
         ? current
         : { ...current, managerIds: nextManagerIds };
     });
-  }, [availableManagers, draft.selectedAreaKeys]);
+  }, [availableManagers]);
 
   useEffect(() => {
     const availableInspectorIds = new Set(availableInspectors.map((user) => user.id));
@@ -1068,7 +1524,6 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
 
   const selectedManagers = availableManagers.filter((user) => draft.managerIds.includes(user.id));
   const selectedInspectors = availableInspectors.filter((user) => draft.inspectorIds.includes(user.id));
-  const totalPlotEstimate = draft.sourceFiles.reduce((sum, file) => sum + file.plotCount, 0);
   const selectedCities = getSelectedCitiesFromAreaKeys(draft.selectedAreaKeys);
 
   const updateDraft = (patch) => {
@@ -1102,7 +1557,7 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = (submitMode = "draft") => {
     if (!draft.title.trim()) {
       showToast("请填写任务名称", "warning");
       return;
@@ -1134,12 +1589,15 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
       return;
     }
 
-    onSubmit(draft);
+    if (allocatedTotal !== totalPlotEstimate) {
+      showToast(`图斑分配总数（${allocatedTotal}）与图斑总数（${totalPlotEstimate}）不一致，请调整分配`, "warning");
+      return;
+    }
+
+    onSubmit({ ...draft, plotAllocations }, submitMode);
   };
 
-  const sourceTriggerText = draft.sourceFiles.length
-    ? `${draft.sourceFiles[0].name}${draft.sourceFiles.length > 1 ? ` 等 ${draft.sourceFiles.length} 个文件` : ""}`
-    : "选择 SHP / ZIP 文件";
+  const sourceTriggerText = "点击上传 SHP / ZIP 图斑文件";
 
   return (
     <div className="export-modal-overlay">
@@ -1183,7 +1641,7 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
                   />
                   <strong>{sourceTriggerText}</strong>
                   {draft.sourceFiles.length ? (
-                    <span>{`已关联 ${draft.sourceFiles.length} 个来源文件，预估 ${totalPlotEstimate} 个图斑`}</span>
+                    <span>{`已关联 ${draft.sourceFiles.length} 个来源文件，${totalPlotEstimate} 个图斑`}</span>
                   ) : null}
                 </label>
                 <div className="task-upload-list task-upload-list-compact">
@@ -1192,7 +1650,7 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
                       <div key={file.id} className="task-upload-item">
                         <div>
                           <strong>{file.name}</strong>
-                          <span>{file.sizeLabel} · 约 {file.plotCount} 个图斑</span>
+                          <span>{file.sizeLabel} · {file.plotCount} 个图斑</span>
                         </div>
                         <button
                           type="button"
@@ -1277,8 +1735,8 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
                   ) : (
                     <div className="task-user-empty">
                       {draft.selectedAreaKeys.length
-                        ? "当前区域下暂无可联动的市级管理员"
-                        : "请先选择下发区域，系统会自动联动市级管理员"}
+                        ? "当前还没有指定管理员，请从角色管理表单中选择"
+                        : "当前还没有指定管理员，请从角色管理表单中选择"}
                     </div>
                   )}
                 </div>
@@ -1306,15 +1764,41 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
                 </div>
                 <div className="task-user-list">
                   {selectedInspectors.length ? (
-                    selectedInspectors.map((user) => (
-                      <div key={user.id} className="task-user-option active">
-                        <div className="task-user-meta">
-                          <strong>{user.nickname}</strong>
-                          <span>{getAreaText(user)}</span>
-                          <em>{user.role} · {user.title}</em>
+                    selectedInspectors.map((user) => {
+                      const userPlots = plotAllocations[user.id] || 0;
+                      const canDecrease = userPlots > 1;
+                      const canIncrease = allocatedTotal < totalPlotEstimate;
+                      return (
+                        <div key={user.id} className="task-user-option active">
+                          <div className="task-user-meta">
+                            <strong>{user.nickname}</strong>
+                            <span>{getAreaText(user)}</span>
+                            <em>{user.role} · {user.title}</em>
+                          </div>
+                          {totalPlotEstimate > 0 ? (
+                            <div className="task-user-plot-control">
+                              <button
+                                type="button"
+                                className="task-plot-adjust-btn"
+                                disabled={!canDecrease}
+                                onClick={() => handlePlotAdjust(user.id, -1)}
+                              >
+                                −
+                              </button>
+                              <span className="task-user-plot-badge">{userPlots} 个图斑</span>
+                              <button
+                                type="button"
+                                className="task-plot-adjust-btn"
+                                disabled={!canIncrease}
+                                onClick={() => handlePlotAdjust(user.id, 1)}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <div className="task-user-empty">
                       {draft.selectedAreaKeys.length
@@ -1323,6 +1807,15 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
                     </div>
                   )}
                 </div>
+
+                {selectedInspectors.length > 0 && totalPlotEstimate > 0 ? (
+                  <div className="task-plot-summary">
+                    已分配 {allocatedTotal} / {totalPlotEstimate} 个图斑
+                    {allocatedTotal < totalPlotEstimate ? (
+                      <span className="task-plot-remaining">（剩余 {totalPlotEstimate - allocatedTotal} 个未分配）</span>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
           </aside>
@@ -1332,8 +1825,16 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
           <button type="button" className="ghost-button slim-button" onClick={onClose}>
             取消
           </button>
-          <button type="button" className="primary-button slim-button" onClick={handleSubmit}>
+          <button type="button" className="ghost-button slim-button" onClick={() => handleSubmit("draft")}>
             保存草稿
+          </button>
+          <button
+            type="button"
+            className="primary-button slim-button"
+            onClick={() => handleSubmit("dispatch")}
+            autoFocus
+          >
+            保存并下发
           </button>
         </div>
       </div>
@@ -1375,5 +1876,3 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
     </div>
   );
 }
-
-

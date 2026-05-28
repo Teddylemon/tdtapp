@@ -78,12 +78,12 @@
 .task-metric-cell {
   align-content: center;
   align-self: center;
-  justify-self: center;
+  justify-self: start;
   min-height: 100%;
   padding: 0;
   width: 132px;
-  justify-items: center;
-  text-align: center;
+  justify-items: start;
+  text-align: left;
 }
 
 .task-main-cell strong,
@@ -119,8 +119,8 @@
 }
 
 .tasks-table-shell .table-head.cols-tasks > :nth-child(3) {
-  justify-self: center;
-  text-align: center;
+  justify-self: start;
+  text-align: left;
 }
 
 .task-progress-ring {
@@ -436,7 +436,7 @@
 .export-modal-card.task-modal-card {
   width: min(96vw, 1120px);
   max-width: 1120px;
-  max-height: min(86vh, 820px);
+  max-height: min(95vh, 960px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -478,9 +478,7 @@
   padding-left: 4px;
   display: flex;
   flex-direction: column;
-  align-self: stretch;
-  height: 100%;
-  min-height: 100%;
+  min-height: 0;
 }
 
 .task-modal-body,
@@ -618,12 +616,9 @@
 
 .task-user-section {
   flex: 1 1 0;
-  min-height: 800px;
-  height: 800px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  align-content: stretch;
-  justify-content: flex-start;
 }
 
 .task-selected-chip-row {
@@ -860,6 +855,20 @@
   flex: 0 0 auto;
 }
 
+.task-selection-block:last-child {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 520px;
+  height: 100%;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.task-selection-block:last-child .task-user-list {
+  max-height: none;
+  min-height: 0;
+  overflow: visible;
+}
+
 .task-selection-card {
   padding: 14px;
   border: 1px solid #ece4da;
@@ -1059,5 +1068,675 @@
   .task-action-group .inline-button {
     min-width: 58px;
     padding: 0 8px;
+  }
+}
+
+/* ---- 用户图斑分配控制 ---- */
+.task-user-plot-control {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.task-plot-adjust-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #d7cabc;
+  border-radius: 50%;
+  background: #fffdfa;
+  color: #524d45;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  transition: border-color 0.18s, background 0.18s;
+}
+
+.task-plot-adjust-btn:hover:not(:disabled) {
+  border-color: #7d95ef;
+  background: #f0f2fd;
+  color: #5b4f8a;
+}
+
+.task-plot-adjust-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.task-user-plot-badge {
+  padding: 3px 10px;
+  background: #e8e4f4;
+  color: #5b4f8a;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 20px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.task-plot-summary {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #847b71;
+  text-align: right;
+  line-height: 20px;
+}
+
+.task-plot-remaining {
+  color: #c78a4a;
+}
+
+/* ===== 详情页 Tab 导航 ===== */
+.task-detail-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid #e6dfd5;
+  border-radius: 999px;
+  background: rgba(250, 252, 255, 0.86);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.task-detail-tab {
+  height: 30px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #8a8176;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.task-detail-tab.active {
+  background: linear-gradient(180deg, #ffffff 0%, #fcfaf7 100%);
+  color: #2a2723;
+  box-shadow: 0 6px 16px rgba(42, 76, 121, 0.12);
+}
+
+.task-detail-tab:hover:not(.active) {
+  color: #5b5248;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* ===== 详情页 三七分主网格 ===== */
+.task-detail-main-grid {
+  display: grid;
+  grid-template-columns: 3fr 7fr;
+  gap: 20px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ===== 左侧表单 ===== */
+.task-detail-form {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid #ece4da;
+  border-radius: 14px;
+  background: #fcfbf8;
+  align-content: start;
+  overflow: auto;
+}
+
+.task-detail-form-group {
+  display: grid;
+  gap: 4px;
+}
+
+.task-detail-form-label {
+  color: #8a8176;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.task-detail-form-value {
+  color: #2a2723;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.task-detail-inspector-list {
+  display: grid;
+  gap: 10px;
+}
+
+.task-detail-inspector-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid #ece4da;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.task-detail-inspector-row strong {
+  color: #2a2723;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.task-detail-inspector-row > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #847b71;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.task-detail-plot-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  background: #e8e4f4;
+  color: #5b4f8a;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  line-height: 18px;
+}
+
+/* ===== 右侧地图列 ===== */
+.task-detail-map-column {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.task-leaflet-shell {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  border: 1px solid #e6dfd5;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.task-leaflet-map {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+  border-radius: 14px;
+}
+
+/* ===== 图例 ===== */
+.task-map-legend {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 1000;
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid #e6dfd5;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 24px rgba(29, 28, 25, 0.1);
+  min-width: 160px;
+  max-width: 220px;
+}
+
+.task-legend-title {
+  color: #2a2723;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.task-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #5b5248;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.task-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.task-legend-divider {
+  height: 1px;
+  background: #e6dfd5;
+  margin: 2px 0;
+}
+
+.task-legend-file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 110px;
+}
+
+.task-legend-count {
+  margin-left: auto;
+  color: #8a8176;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* ===== 照片查看器 ===== */
+.task-photo-viewer {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
+}
+
+.task-photo-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid #ddd6cc;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(29, 28, 25, 0.08);
+  color: #5b5248;
+  transition: background 0.18s ease;
+}
+
+.task-photo-toggle:hover {
+  background: #f7f4ef;
+}
+
+.task-photo-panel {
+  position: absolute;
+  top: 46px;
+  right: 0;
+  width: 280px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 14px;
+  border: 1px solid #e6dfd5;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(29, 28, 25, 0.14);
+}
+
+.task-photo-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.task-photo-panel-head strong {
+  color: #2a2723;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.task-photo-close {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+  color: #8a8176;
+  padding: 0;
+  line-height: 24px;
+}
+
+.task-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.task-photo-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid #ece4da;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: transparent;
+  transition: border-color 0.18s ease;
+}
+
+.task-photo-thumb:hover {
+  border-color: #7d95ef;
+}
+
+.task-photo-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  background: #f5f2ed;
+  color: #8a8176;
+  font-size: 10px;
+  text-align: center;
+  line-height: 14px;
+}
+
+/* ===== 图斑 Popup ===== */
+.task-spot-popup {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 20px;
+  min-width: 180px;
+}
+
+.task-spot-popup strong {
+  color: #26231f;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.task-spot-popup-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.task-spot-popup-row > span:first-child {
+  color: #8a8176;
+  flex-shrink: 0;
+}
+
+.task-spot-popup-row > span:last-child {
+  color: #2a2723;
+  text-align: right;
+}
+
+.task-spot-result-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.task-spot-result-tag.correct {
+  background: #e6ecfd;
+  color: #4a5faa;
+}
+
+.task-spot-result-tag.incorrect {
+  background: #fde8e0;
+  color: #b35d3c;
+}
+
+.task-spot-result-tag.pending {
+  background: #fdf3db;
+  color: #a07c38;
+}
+
+/* ===== 核查结果 Tab 图表 ===== */
+.task-detail-chart-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.task-chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.task-chart-card {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid #ece4da;
+  border-radius: 14px;
+  background: #fcfbf8;
+}
+
+.task-chart-head {
+  display: grid;
+  gap: 2px;
+}
+
+.task-chart-head strong {
+  color: #2a2723;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.task-chart-head span {
+  color: #8a8176;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.task-chart-body {
+  min-height: 0;
+}
+
+/* ===== SHP 图例交互 ===== */
+.task-legend-shp {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.task-legend-shp:hover {
+  background: rgba(125, 149, 239, 0.08);
+}
+
+.task-legend-icon {
+  display: flex;
+  align-items: center;
+  color: #8a8176;
+  flex-shrink: 0;
+}
+
+/* ===== 图斑属性表弹窗 ===== */
+.export-modal-card.task-spot-table-modal,
+.task-spot-table-modal {
+  /* Override generic export modal size so this table modal can be wider */
+  width: min(98vw, 1200px);
+  max-width: 1200px;
+  max-height: min(92vh, 860px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.task-spot-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #ece4da;
+  border-radius: 10px;
+}
+
+.task-spot-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 22px;
+  table-layout: fixed;
+}
+
+.task-spot-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.task-spot-table th {
+  background: #f7f5f2;
+  color: #6d6358;
+  font-weight: 600;
+  font-size: 12px;
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e6dfd5;
+  white-space: nowrap;
+}
+
+.task-spot-table th:nth-child(1) { width: 12%; }
+.task-spot-table th:nth-child(2) { width: 14%; }
+.task-spot-table th:nth-child(3) { width: 18%; }
+.task-spot-table th:nth-child(4) { width: 8%; }
+.task-spot-table th:nth-child(5) { width: 36%; }
+.task-spot-table th:nth-child(6) { width: 12%; }
+
+.task-spot-table td {
+  padding: 9px 14px;
+  border-bottom: 1px solid #f0ebe2;
+  color: #2a2723;
+}
+
+/* prevent long content from overlapping; allow wrapping within notes column */
+.task-spot-table td {
+  word-break: break-word;
+}
+
+.task-spot-table tbody tr:hover {
+  background: #fdfbf7;
+}
+
+.task-spot-table-id {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.task-spot-table-coord {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 11px;
+  color: #6d6358;
+  white-space: nowrap;
+}
+
+.task-spot-table-notes {
+  /* width controlled by table-layout: fixed */
+}
+
+.task-spot-table-photos {
+  text-align: center;
+}
+
+.task-spot-table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #ece4da;
+}
+
+.task-spot-table-total {
+  color: #847b71;
+  font-size: 13px;
+}
+
+.task-spot-table-pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.task-spot-page-size {
+  color: #847b71;
+  font-size: 13px;
+  margin-right: 8px;
+}
+
+/* move feature type column content slightly right to increase separation from ID */
+.task-spot-table th:nth-child(2),
+.task-spot-table td:nth-child(2) {
+  padding-left: 40px;
+}
+
+.task-pager-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid #d7cabc;
+  border-radius: 8px;
+  background: #fff;
+  color: #524d45;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+}
+
+.task-pager-btn:hover:not(:disabled) {
+  border-color: #7d95ef;
+  background: #f0f2fd;
+}
+
+.task-pager-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.task-pager-info {
+  color: #524d45;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 1200px) {
+  .task-detail-main-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(360px, 1fr);
+  }
+
+  .task-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .task-leaflet-map {
+    min-height: 360px;
+  }
+}
+
+@media (max-width: 768px) {
+  .task-photo-panel {
+    width: 240px;
+  }
+
+  .task-photo-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .task-chart-grid {
+    gap: 12px;
   }
 }

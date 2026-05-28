@@ -19508,7 +19508,7 @@
                       "type": "frame",
                       "id": "Y2Jczd",
                       "name": "a25Icon",
-                      "width": 580,
+                      "width": 642.0000000000001,
                       "height": 52,
                       "fill": "#FFF7ED",
                       "cornerRadius": 26,
@@ -54289,6 +54289,50 @@
         },
         {
           "type": "frame",
+          "id": "BzmY5",
+          "x": 0,
+          "y": 782,
+          "name": "pageIntentOverlay",
+          "enabled": false,
+          "width": 358,
+          "height": 62,
+          "fill": "#fffffff5",
+          "cornerRadius": 20,
+          "stroke": {
+            "thickness": 1,
+            "fill": "#EAF0F6"
+          },
+          "layout": "vertical",
+          "gap": 4,
+          "padding": [
+            10,
+            14
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "gUmba",
+              "name": "pageIntentTitle",
+              "fill": "#0F172A",
+              "content": "我的中心与数据闭环",
+              "fontFamily": "Alibaba PuHuiTi 3.0",
+              "fontSize": 16,
+              "fontWeight": "800"
+            },
+            {
+              "type": "text",
+              "id": "aJjp4",
+              "name": "pageIntentSubtitle",
+              "fill": "#64748B",
+              "content": "登录注册、资料设置、我的标绘、轨迹、离线包、上传下载、纠错与反馈。",
+              "fontFamily": "Alibaba PuHuiTi 3.0",
+              "fontSize": 12,
+              "fontWeight": "600"
+            }
+          ]
+        },
+        {
+          "type": "frame",
           "id": "tdYCg",
           "name": "p2Wrap",
           "width": "fill_container",
@@ -55150,50 +55194,6 @@
                   ]
                 }
               ]
-            }
-          ]
-        },
-        {
-          "type": "frame",
-          "id": "BzmY5",
-          "x": 0,
-          "y": 782,
-          "name": "pageIntentOverlay",
-          "enabled": false,
-          "width": 358,
-          "height": 62,
-          "fill": "#fffffff5",
-          "cornerRadius": 20,
-          "stroke": {
-            "thickness": 1,
-            "fill": "#EAF0F6"
-          },
-          "layout": "vertical",
-          "gap": 4,
-          "padding": [
-            10,
-            14
-          ],
-          "children": [
-            {
-              "type": "text",
-              "id": "gUmba",
-              "name": "pageIntentTitle",
-              "fill": "#0F172A",
-              "content": "我的中心与数据闭环",
-              "fontFamily": "Alibaba PuHuiTi 3.0",
-              "fontSize": 16,
-              "fontWeight": "800"
-            },
-            {
-              "type": "text",
-              "id": "aJjp4",
-              "name": "pageIntentSubtitle",
-              "fill": "#64748B",
-              "content": "登录注册、资料设置、我的标绘、轨迹、离线包、上传下载、纠错与反馈。",
-              "fontFamily": "Alibaba PuHuiTi 3.0",
-              "fontSize": 12,
-              "fontWeight": "600"
             }
           ]
         }

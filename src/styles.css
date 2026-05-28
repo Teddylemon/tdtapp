@@ -409,7 +409,7 @@ select {
   position: fixed;
   top: 24px;
   right: 24px;
-  z-index: 120;
+  z-index: 5010;
   display: grid;
   gap: 10px;
   pointer-events: none;
