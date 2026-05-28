@@ -1,40 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
 import FilterSelect from "../../components/FilterSelect";
+import Pagination from "../../components/Pagination";
+import { showToast } from "../../components/utils";
+import {
+  CITY_COUNTY_MAP,
+  MOCK_USERS,
+  PROVINCE_NAME,
+  USER_ROLE_OPTIONS,
+  USER_LEVEL_OPTIONS,
+  getAreaText,
+  getCityOptions,
+  getCountyOptions,
+  getRoleLevel,
+  persistUserRecords,
+  readUserRecords,
+} from "../_shared/userDirectory";
 import "./role-management.css";
 
-const ROLE_OPTIONS = ["超级管理员", "行业用户", "默认角色"];
+const roleStorageKey = "tdt-role-user-state";
 
-const initialUsers = [
-  { id: "1000001", nickname: "macong", phone: "18612341558", organization: "平台运营中心", title: "管理员", role: "超级管理员" },
-  { id: "1000002", nickname: "ceshi", phone: "15529875623", organization: "行业应用部", title: "项目专员", role: "默认角色" },
-  { id: "1000003", nickname: "zhangjia", phone: "17766243188", organization: "自然资源局", title: "业务负责人", role: "行业用户" },
-  { id: "1000004", nickname: "jxb_01", phone: "17699843214", organization: "行业应用部", title: "数据专员", role: "默认角色" },
-  { id: "1000005", nickname: "wangwei", phone: "15812342134", organization: "平台运营中心", title: "运营专员", role: "默认角色" },
-  { id: "1000006", nickname: "chenwen", phone: "15267898322", organization: "市政务办", title: "行业管理员", role: "行业用户" },
-  { id: "1000007", nickname: "liulian", phone: "15844424268", organization: "平台运营中心", title: "产品经理", role: "默认角色" },
-];
-
-const emptyForm = {
+const defaultForm = {
   id: "",
   nickname: "",
   phone: "",
   organization: "",
   title: "",
-  role: ROLE_OPTIONS[2],
+  role: "市级职员",
+  province: PROVINCE_NAME,
+  city: Object.keys(CITY_COUNTY_MAP)[0],
+  county: "全市统筹",
 };
-
-function emitToast(message, tone = "success") {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(
-    new CustomEvent("tdt-toast", {
-      detail: {
-        id: `user-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-        message,
-        tone,
-      },
-    }),
-  );
-}
 
 function maskPhone(phone) {
   if (phone.length !== 11) return phone;
@@ -42,8 +37,34 @@ function maskPhone(phone) {
 }
 
 function nextUserId(users) {
-  const maxId = users.reduce((max, user) => Math.max(max, Number(user.id) || 0), 1000000);
+  const maxId = users.reduce((max, user) => Math.max(max, Number(user.id) || 0), 2000000);
   return String(maxId + 1).padStart(7, "0");
+}
+
+function normalizeFormByRole(form) {
+  const next = { ...form };
+
+  if (next.role.startsWith("省级")) {
+    next.city = "省级";
+    next.county = "-";
+    next.organization = next.organization || "湖北省自然资源厅";
+    return next;
+  }
+
+  if (!next.city || next.city === "省级") {
+    next.city = Object.keys(CITY_COUNTY_MAP)[0];
+  }
+
+  if (next.role.startsWith("市级")) {
+    next.county = "全市统筹";
+    return next;
+  }
+
+  const counties = getCountyOptions(next.city);
+  if (!counties.includes(next.county)) {
+    next.county = counties[0] ?? "";
+  }
+  return next;
 }
 
 function ActionIcon({ type }) {
@@ -58,8 +79,10 @@ function ActionIcon({ type }) {
         )}
         {type === "reset" && (
           <>
-            <path d="M13 8a5 5 0 1 1-1.3-3.4" />
-            <path d="M13 3.2v3.4H9.6" />
+            <path d="M13 8a5 5 0 0 1-1.3 3.4" />
+            <path d="M3 8a5 5 0 0 1 8.5-3.5" />
+            <path d="m13.2 6.2-1.7-1.8-2.1 1.5" />
+            <path d="m2.8 9.8 1.7 1.8 2.1-1.5" />
           </>
         )}
         {type === "delete" && (
@@ -77,65 +100,6 @@ function ActionIcon({ type }) {
         )}
       </svg>
     </span>
-  );
-}
-
-function Pagination({
-  currentPage,
-  totalPages,
-  totalLabel,
-  onChangePage,
-  pageSize = 10,
-  pageSizeOptions = [10, 20, 30],
-  onChangePageSize,
-}) {
-  return (
-    <div className="pagination">
-      <div className="pagination-meta">
-        <span className="pagination-total">{totalLabel}</span>
-        <label className="page-size-select">
-          <span>每页</span>
-          <select value={pageSize} onChange={(event) => onChangePageSize?.(Number(event.target.value))}>
-            {pageSizeOptions.map((option) => (
-              <option key={option} value={option}>
-                {option} 条
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="pagination-controls">
-        <button
-          type="button"
-          className="page-button"
-          disabled={currentPage === 1}
-          onClick={() => onChangePage(Math.max(1, currentPage - 1))}
-        >
-          上一页
-        </button>
-        {Array.from({ length: Math.min(totalPages, 5) }, (_, index) => {
-          const pageNumber = index + 1;
-          return (
-            <button
-              key={pageNumber}
-              type="button"
-              className={`page-button ${currentPage === pageNumber ? "active" : ""}`}
-              onClick={() => onChangePage(pageNumber)}
-            >
-              {pageNumber}
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          className="page-button"
-          disabled={currentPage === totalPages}
-          onClick={() => onChangePage(Math.min(totalPages, currentPage + 1))}
-        >
-          下一页
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -163,26 +127,69 @@ function UserModal({ title, description, onClose, children, actions, wide = fals
 }
 
 export default function RoleManagementPage() {
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState(readUserRecords);
   const [keyword, setKeyword] = useState("");
   const [roleFilter, setRoleFilter] = useState([]);
+  const [levelFilter, setLevelFilter] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [editingUserId, setEditingUserId] = useState(null);
   const [deleteUserId, setDeleteUserId] = useState(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(defaultForm);
+
+  useEffect(() => {
+    persistUserRecords(users);
+  }, [users]);
+
+  const cityOptions = useMemo(() => getCityOptions(users), [users]);
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
       const normalizedKeyword = keyword.trim().toLowerCase();
       const matchKeyword =
         normalizedKeyword === "" ||
-        [user.id, user.nickname, user.phone, user.organization, user.title]
-          .some((field) => field.toLowerCase().includes(normalizedKeyword));
+        [
+          user.id,
+          user.nickname,
+          user.phone,
+          user.organization,
+          user.title,
+          user.role,
+          user.city,
+          user.county,
+        ].some((field) => field.toLowerCase().includes(normalizedKeyword));
+
       const matchRole = roleFilter.length === 0 || roleFilter.includes(user.role);
-      return matchKeyword && matchRole;
+      const level = getRoleLevel(user.role);
+      const matchLevel = levelFilter.length === 0 || levelFilter.includes(level);
+      return matchKeyword && matchRole && matchLevel;
     });
-  }, [keyword, roleFilter, users]);
+  }, [keyword, levelFilter, roleFilter, users]);
+
+  const roleCounts = useMemo(
+    () =>
+      users.reduce(
+        (acc, user) => {
+          acc[user.role] = (acc[user.role] ?? 0) + 1;
+          return acc;
+        },
+        Object.fromEntries(USER_ROLE_OPTIONS.map((role) => [role, 0])),
+      ),
+    [users],
+  );
+
+  const levelCounts = useMemo(
+    () =>
+      users.reduce(
+        (acc, user) => {
+          const level = getRoleLevel(user.role);
+          acc[level] = (acc[level] ?? 0) + 1;
+          return acc;
+        },
+        Object.fromEntries(USER_LEVEL_OPTIONS.map((level) => [level, 0])),
+      ),
+    [users],
+  );
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
 
@@ -196,58 +203,86 @@ export default function RoleManagementPage() {
 
   const openCreateModal = () => {
     setEditingUserId("new");
-    setForm({
-      ...emptyForm,
-      id: nextUserId(users),
-    });
+    setForm(
+      normalizeFormByRole({
+        ...defaultForm,
+        id: nextUserId(users),
+        city: cityOptions[0] ?? Object.keys(CITY_COUNTY_MAP)[0],
+      }),
+    );
   };
 
   const openEditModal = (user) => {
     setEditingUserId(user.id);
-    setForm({ ...user });
+    setForm(normalizeFormByRole({ ...user }));
+  };
+
+  const updateForm = (patch) => {
+    setForm((current) => normalizeFormByRole({ ...current, ...patch }));
   };
 
   const saveUser = () => {
     if (!/^\d{7}$/.test(form.id)) {
-      emitToast("用户 ID 需为 7 位数字", "warning");
+      showToast("用户 ID 需为 7 位数字", "warning");
       return;
     }
 
     if (!/^1\d{10}$/.test(form.phone)) {
-      emitToast("请填写正确的手机号", "warning");
+      showToast("请填写正确的手机号", "warning");
       return;
     }
 
     if (!form.nickname.trim() || !form.organization.trim() || !form.title.trim()) {
-      emitToast("请填写完整的用户信息", "warning");
+      showToast("请填写完整的用户信息", "warning");
+      return;
+    }
+
+    const duplicated = users.some((user) => user.id === form.id && user.id !== activeUser?.id);
+    if (duplicated) {
+      showToast("用户 ID 已存在，请更换后再保存", "warning");
       return;
     }
 
     if (editingUserId === "new") {
       setUsers((current) => [{ ...form }, ...current]);
       setPage(1);
-      emitToast(`已新增用户 ${form.nickname}`);
+      showToast(`已新增用户 ${form.nickname}`);
     } else if (activeUser) {
       setUsers((current) =>
         current.map((user) => (user.id === activeUser.id ? { ...form } : user)),
       );
-      emitToast(`已更新用户 ${form.nickname}`);
+      showToast(`已更新用户 ${form.nickname}`);
     }
 
     setEditingUserId(null);
-    setForm(emptyForm);
+    setForm(defaultForm);
   };
 
   const resetPassword = (user) => {
-    emitToast(`已为 ${user.nickname} 重置密码`);
+    showToast(`已为 ${user.nickname} 重置密码`);
   };
 
   const confirmDelete = () => {
     if (!deleteUser) return;
     setUsers((current) => current.filter((user) => user.id !== deleteUser.id));
-    emitToast(`已删除用户 ${deleteUser.nickname}`, "warning");
+    showToast(`已删除用户 ${deleteUser.nickname}`, "warning");
     setDeleteUserId(null);
   };
+
+  const resetMockUsers = () => {
+    setUsers(MOCK_USERS);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(roleStorageKey);
+    }
+    setKeyword("");
+    setRoleFilter([]);
+    setLevelFilter([]);
+    setPage(1);
+    showToast("已重置为省-市-县三级 mock 用户数据");
+  };
+
+  const countyOptions = getCountyOptions(form.city);
+  const currentLevel = getRoleLevel(form.role);
 
   return (
     <div className="page-content page-content--list role-page">
@@ -261,7 +296,7 @@ export default function RoleManagementPage() {
                 setKeyword(event.target.value);
                 setPage(1);
               }}
-              placeholder="搜索用户ID、昵称、手机号、组织机构或职务"
+              placeholder="搜索用户ID、姓名、手机号、区域、组织或岗位"
             />
           </div>
         </div>
@@ -270,14 +305,28 @@ export default function RoleManagementPage() {
           <div className="filter-cluster role-filter-cluster">
             <FilterSelect
               placeholder="角色"
-              options={ROLE_OPTIONS}
+              options={USER_ROLE_OPTIONS}
               onChange={(selected, allSelected) => {
                 setRoleFilter(allSelected ? [] : selected);
                 setPage(1);
               }}
+              optionCounts={roleCounts}
+            />
+            <FilterSelect
+              placeholder="层级"
+              options={USER_LEVEL_OPTIONS}
+              onChange={(selected, allSelected) => {
+                setLevelFilter(allSelected ? [] : selected);
+                setPage(1);
+              }}
+              optionCounts={levelCounts}
             />
           </div>
           <div className="filter-actions">
+            <button type="button" className="ghost-button slim-button" onClick={resetMockUsers}>
+              <ActionIcon type="reset" />
+              <span>重置三级 Mock</span>
+            </button>
             <button type="button" className="primary-button slim-button" onClick={openCreateModal}>
               <ActionIcon type="plus" />
               <span>新增用户</span>
@@ -288,45 +337,53 @@ export default function RoleManagementPage() {
         <div className="list-shell-body">
           <div className="role-table-scroll">
             <div className="table-shell selectable role-table-shell">
-            <div className="table-row table-head role-cols">
-              <span>用户ID</span>
-              <span>昵称</span>
-              <span>绑定手机号</span>
-              <span>组织机构</span>
-              <span>职务</span>
-              <span>角色</span>
-              <span>操作</span>
-            </div>
-            {pagedUsers.map((user) => (
-              <div key={user.id} className="table-row role-cols">
-                <span className="role-code-cell">{user.id}</span>
-                <span className="role-name-cell">
-                  <strong>{user.nickname}</strong>
-                </span>
-                <span>{maskPhone(user.phone)}</span>
-                <span>{user.organization}</span>
-                <span>{user.title}</span>
-                <span>{user.role}</span>
-                <span className="role-actions-cell">
-                  <button type="button" className="inline-button action-view" onClick={() => openEditModal(user)}>
-                    <ActionIcon type="edit" />
-                    <span>编辑</span>
-                  </button>
-                  <button type="button" className="inline-button action-view" onClick={() => resetPassword(user)}>
-                    <ActionIcon type="reset" />
-                    <span>重置密码</span>
-                  </button>
-                  <button type="button" className="inline-button action-view role-inline-danger" onClick={() => setDeleteUserId(user.id)}>
-                    <ActionIcon type="delete" />
-                    <span>删除</span>
-                  </button>
-                </span>
+              <div className="table-row table-head role-cols">
+                <span>用户ID</span>
+                <span>姓名</span>
+                <span>手机号</span>
+                <span>省 / 市 / 县</span>
+                <span>组织机构</span>
+                <span>角色 / 岗位</span>
+                <span>操作</span>
               </div>
-            ))}
-            {pagedUsers.length === 0 ? (
-              <div className="role-empty">当前筛选条件下没有用户记录</div>
-            ) : null}
-          </div>
+              {pagedUsers.map((user) => (
+                <div key={user.id} className="table-row role-cols">
+                  <span className="role-code-cell">{user.id}</span>
+                  <span className="role-name-cell">
+                    <strong>{user.nickname}</strong>
+                    <em>{getRoleLevel(user.role)}</em>
+                  </span>
+                  <span>{maskPhone(user.phone)}</span>
+                  <span className="role-area-cell">{getAreaText(user)}</span>
+                  <span>{user.organization}</span>
+                  <span className="role-job-cell">
+                    <strong>{user.role}</strong>
+                    <em>{user.title}</em>
+                  </span>
+                  <span className="role-actions-cell">
+                    <button type="button" className="inline-button action-view" onClick={() => openEditModal(user)}>
+                      <ActionIcon type="edit" />
+                      <span>编辑</span>
+                    </button>
+                    <button type="button" className="inline-button action-view" onClick={() => resetPassword(user)}>
+                      <ActionIcon type="reset" />
+                      <span>重置密码</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-button action-view role-inline-danger"
+                      onClick={() => setDeleteUserId(user.id)}
+                    >
+                      <ActionIcon type="delete" />
+                      <span>删除</span>
+                    </button>
+                  </span>
+                </div>
+              ))}
+              {pagedUsers.length === 0 ? (
+                <div className="role-empty">当前筛选条件下没有用户记录</div>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -349,7 +406,7 @@ export default function RoleManagementPage() {
       {editingUserId !== null ? (
         <UserModal
           title={editingUserId === "new" ? "新增用户" : "编辑用户"}
-          description="维护用户角色信息，用户ID固定为7位数字。"
+          description="统一维护省、市、县三级角色用户，任务下发模块会直接拉取这里的数据。"
           onClose={() => setEditingUserId(null)}
           actions={
             <>
@@ -372,49 +429,29 @@ export default function RoleManagementPage() {
                   type="text"
                   maxLength="7"
                   value={form.id}
-                  onChange={(event) => setForm((current) => ({ ...current, id: event.target.value }))}
+                  onChange={(event) => updateForm({ id: event.target.value })}
                   placeholder="7位数字"
                 />
               </div>
               <div className="form-block">
-                <label>昵称</label>
+                <label>姓名</label>
                 <input
                   className="input"
                   type="text"
                   value={form.nickname}
-                  onChange={(event) => setForm((current) => ({ ...current, nickname: event.target.value }))}
-                  placeholder="请输入昵称"
+                  onChange={(event) => updateForm({ nickname: event.target.value })}
+                  placeholder="请输入姓名"
                 />
               </div>
               <div className="form-block">
-                <label>绑定手机号</label>
+                <label>手机号</label>
                 <input
                   className="input"
                   type="text"
                   maxLength="11"
                   value={form.phone}
-                  onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                  onChange={(event) => updateForm({ phone: event.target.value })}
                   placeholder="请输入手机号"
-                />
-              </div>
-              <div className="form-block">
-                <label>组织机构</label>
-                <input
-                  className="input"
-                  type="text"
-                  value={form.organization}
-                  onChange={(event) => setForm((current) => ({ ...current, organization: event.target.value }))}
-                  placeholder="请输入组织机构"
-                />
-              </div>
-              <div className="form-block">
-                <label>职务</label>
-                <input
-                  className="input"
-                  type="text"
-                  value={form.title}
-                  onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-                  placeholder="请输入职务"
                 />
               </div>
               <div className="form-block">
@@ -422,14 +459,80 @@ export default function RoleManagementPage() {
                 <select
                   className="select"
                   value={form.role}
-                  onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}
+                  onChange={(event) => updateForm({ role: event.target.value })}
                 >
-                  {ROLE_OPTIONS.map((option) => (
+                  {USER_ROLE_OPTIONS.map((option) => (
                     <option key={option} value={option}>
                       {option}
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="form-block">
+                <label>省份</label>
+                <input className="input" type="text" value={form.province} readOnly />
+              </div>
+              <div className="form-block">
+                <label>层级</label>
+                <input className="input" type="text" value={currentLevel} readOnly />
+              </div>
+              <div className="form-block">
+                <label>市州</label>
+                <select
+                  className="select"
+                  value={form.city}
+                  disabled={currentLevel === "省级"}
+                  onChange={(event) => updateForm({ city: event.target.value })}
+                >
+                  {currentLevel === "省级" ? (
+                    <option value="省级">省级</option>
+                  ) : (
+                    cityOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+              <div className="form-block">
+                <label>区县</label>
+                <select
+                  className="select"
+                  value={form.county}
+                  disabled={currentLevel === "省级" || currentLevel === "市级"}
+                  onChange={(event) => updateForm({ county: event.target.value })}
+                >
+                  {currentLevel === "省级" ? <option value="-">-</option> : null}
+                  {currentLevel === "市级" ? <option value="全市统筹">全市统筹</option> : null}
+                  {currentLevel === "县级"
+                    ? countyOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))
+                    : null}
+                </select>
+              </div>
+              <div className="form-block">
+                <label>组织机构</label>
+                <input
+                  className="input"
+                  type="text"
+                  value={form.organization}
+                  onChange={(event) => updateForm({ organization: event.target.value })}
+                  placeholder="请输入组织机构"
+                />
+              </div>
+              <div className="form-block">
+                <label>岗位</label>
+                <input
+                  className="input"
+                  type="text"
+                  value={form.title}
+                  onChange={(event) => updateForm({ title: event.target.value })}
+                  placeholder="请输入岗位名称"
+                />
               </div>
             </div>
           </div>
@@ -453,7 +556,7 @@ export default function RoleManagementPage() {
           }
         >
           <div className="role-form-surface role-delete-note">
-            <p>删除后该用户将从当前用户角色管理列表中移除。</p>
+            <p>删除后，该用户将不会出现在任务下发模块的可选用户列表里。</p>
           </div>
         </UserModal>
       ) : null}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import FilterSelect from "../../components/FilterSelect";
+import { formatDate } from "../../components/utils";
 import "./release-notes.css";
 
 const RELEASE_STATUS_OPTIONS = ["已同步推送", "待同步推送", "同步推送中"];
@@ -179,6 +180,18 @@ export default function ReleaseNotesManager() {
     });
   }, [keyword, releases, statusFilter]);
 
+  const releaseStatusCounts = useMemo(
+    () =>
+      releases.reduce(
+        (acc, release) => {
+          acc[release.status] = (acc[release.status] ?? 0) + 1;
+          return acc;
+        },
+        Object.fromEntries(RELEASE_STATUS_OPTIONS.map((status) => [status, 0])),
+      ),
+    [releases],
+  );
+
   const totalPages = Math.max(1, Math.ceil(filteredReleases.length / pageSize));
 
   useEffect(() => {
@@ -257,6 +270,7 @@ export default function ReleaseNotesManager() {
                 setStatusFilter(allSelected ? [] : selected);
                 setPage(1);
               }}
+              optionCounts={releaseStatusCounts}
             />
           </div>
           <div className="filter-actions">
@@ -287,7 +301,7 @@ export default function ReleaseNotesManager() {
                   <em>{countItems(release.content)} 项更新</em>
                 </span>
                 <span className="release-summary-cell">{release.summary}</span>
-                <span>{release.publishedAt}</span>
+                <span>{formatDate(release.publishedAt)}</span>
                 <span>
                   <span
                     className={`release-status-pill ${
@@ -338,7 +352,7 @@ export default function ReleaseNotesManager() {
       {selectedRelease ? (
         <ReleaseModal
           title={`${selectedRelease.version} 更新详情`}
-          description={`发布时间 ${selectedRelease.publishedAt}`}
+          description={`发布时间 ${formatDate(selectedRelease.publishedAt)}`}
           onClose={() => setSelectedReleaseId(null)}
           actions={
             <button

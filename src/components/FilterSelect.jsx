@@ -20,25 +20,27 @@ export default function FilterSelect({ placeholder, options, defaultAll = false,
   const allSelected = selected.length === options.length && options.length > 0;
   const hasSelected = selected.length > 0;
 
-  useEffect(() => {
-    onChange?.(selected, allSelected);
-  }, [allSelected, onChange, selected]);
-
   const toggleOption = (value) => {
     if (value === "__ALL__") {
-      setSelected(allSelected ? [] : [...options]);
+      const next = allSelected ? [] : [...options];
+      setSelected(next);
+      onChange?.(next, !allSelected);
       return;
     }
 
-    setSelected((current) => {
-      const exists = current.includes(value);
-      if (exists) return current.filter((item) => item !== value);
-      return [...current, value];
-    });
+    const exists = selected.includes(value);
+    const next = exists ? selected.filter((item) => item !== value) : [...selected, value];
+    setSelected(next);
+    onChange?.(next, next.length === options.length && options.length > 0);
   };
 
-  const clear = () => setSelected([]);
+  const clear = () => {
+    setSelected([]);
+    onChange?.([], false);
+  };
   const getCount = (option) => optionCounts?.[option];
+  const getOptionLabel = (option) =>
+    getCount(option) !== undefined ? `${option} ${getCount(option)}` : option;
 
   return (
     <div
@@ -60,12 +62,12 @@ export default function FilterSelect({ placeholder, options, defaultAll = false,
         <span className="filter-trigger-label">
           {!hasSelected && <span className="filter-placeholder">{placeholder}</span>}
           {allSelected && <span className="filter-token filter-token-all">全部</span>}
-          {!allSelected && selected.length === 1 && <span className="filter-token">{selected[0]}</span>}
+          {!allSelected && selected.length === 1 && <span className="filter-token">{getOptionLabel(selected[0])}</span>}
           {!allSelected && selected.length > 1 && (
             <span className="filter-token-group">
               {selected.map((item) => (
                 <span key={item} className="filter-token">
-                  {item}
+                  {getOptionLabel(item)}
                 </span>
               ))}
             </span>

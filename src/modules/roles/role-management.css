@@ -12,6 +12,12 @@
   min-height: 0;
 }
 
+.role-filter-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .role-filter-cluster .filter-select-shell {
   min-width: 148px;
 }
@@ -49,7 +55,7 @@
 }
 
 .role-cols {
-  grid-template-columns: 96px 110px 128px 140px 108px 108px minmax(380px, 1fr);
+  grid-template-columns: 92px 110px 120px 220px 190px 170px minmax(260px, 1fr);
 }
 
 .role-code-cell {
@@ -63,6 +69,29 @@
 }
 
 .role-name-cell strong {
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.role-name-cell em,
+.role-job-cell em {
+  color: var(--text-soft);
+  font-style: normal;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.role-area-cell {
+  color: #5d5348;
+  line-height: 20px;
+}
+
+.role-job-cell {
+  display: grid;
+  gap: 4px;
+}
+
+.role-job-cell strong {
   font-size: 14px;
   line-height: 22px;
 }
@@ -211,7 +240,7 @@
 
 @media (max-width: 1680px) {
   .role-cols {
-    grid-template-columns: 88px 100px 118px 130px 100px 100px minmax(350px, 1fr);
+    grid-template-columns: 88px 100px 116px 200px 170px 156px minmax(300px, 1fr);
   }
 
   .role-actions-cell {
