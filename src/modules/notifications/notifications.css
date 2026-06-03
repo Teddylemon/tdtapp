@@ -46,7 +46,7 @@
 }
 
 .cols-notifications {
-  grid-template-columns: 96px minmax(320px, 1.9fr) 160px 70px 96px 208px;
+  grid-template-columns: 88px minmax(300px, 2fr) 120px 60px 80px 160px;
 }
 
 .cols-notifications > * {
@@ -76,6 +76,13 @@
   color: #26231f;
 }
 
+.notification-main-preview {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
 .notification-main em {
   display: -webkit-box;
   overflow: hidden;
@@ -86,15 +93,31 @@
   -webkit-box-orient: vertical;
 }
 
+.notification-thumb-small {
+  display: block;
+  width: 56px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #ebe3d8;
+  flex-shrink: 0;
+}
+
 .notification-read-count {
   font-variant-numeric: tabular-nums;
 }
 
 .notification-action-group {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+.notification-action-group .inline-button {
+  min-width: 76px;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 /* Detail page */
@@ -132,7 +155,7 @@
 /* ===== 详情页三七分布局 ===== */
 .notification-detail-main-grid {
   display: grid;
-  grid-template-columns: 2fr 8fr;
+  grid-template-columns: 1.5fr 8.5fr;
   gap: 20px;
   flex: 1 1 auto;
   min-height: 0;
@@ -302,6 +325,69 @@
   opacity: 1;
 }
 
+/* Cover image upload styles */
+.banner-cover-upload {
+  min-height: 100px;
+}
+
+.banner-cover-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 100px;
+  border: 2px dashed #d5cfc6;
+  border-radius: 10px;
+  background: #faf8f4;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.banner-cover-trigger:hover {
+  border-color: #8c847a;
+}
+
+.banner-cover-trigger span {
+  font-size: 14px;
+  color: #8c847a;
+}
+
+.banner-cover-preview {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.banner-cover-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.banner-cover-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(31, 31, 31, 0.72);
+  color: #fff;
+  font-size: 16px;
+  line-height: 26px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.banner-cover-remove:hover {
+  background: rgba(31, 31, 31, 0.9);
+}
+
 @media (max-width: 900px) {
   .notification-detail-header {
     flex-direction: column;
@@ -314,6 +400,6 @@
   }
 
   .cols-notifications {
-    grid-template-columns: 80px minmax(220px, 1.6fr) 120px 60px 88px 176px;
+    grid-template-columns: 80px minmax(220px, 1.6fr) 100px 50px 72px 136px;
   }
 }

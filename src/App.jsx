@@ -17,7 +17,8 @@ import { MarkersListPage, MarkersDetailPage } from "./modules/markers/MarkersPag
 import { TopicListPage, TopicDetailPage } from "./modules/topic/TopicPage";
 import { FeedbackListPage, FeedbackDetailPage } from "./modules/feedback/FeedbackPage";
 import { NotificationListPage, NotificationDetailPage } from "./modules/notifications/NotificationPage";
-import { TaskListPage, TaskDetailPage } from "./modules/tasks/TaskPage";
+import { TaskListPage, TaskCreatePage, TaskDetailPage } from "./modules/tasks/TaskPage";
+import { BannerListPage, BannerDetailPage } from "./modules/banners/BannerPage";
 
 const menuSections = [
   {
@@ -30,6 +31,7 @@ const menuSections = [
       { path: "/topic", label: "主题地图发布管理", icon: "topic" },
       { path: "/tasks", label: "任务下发管理", icon: "tasks" },
       { path: "/notifications", label: "消息推送管理", icon: "notifications" },
+      { path: "/banners", label: "通知公告管理", icon: "banners" },
       { path: "/release-notes", label: "更新日志管理", icon: "release" },
     ],
   },
@@ -69,7 +71,10 @@ function App() {
           <Route path="/feedback/:feedbackId" element={<FeedbackDetailPage />} />
           <Route path="/notifications" element={<NotificationListPage />} />
           <Route path="/notifications/:notificationId" element={<NotificationDetailPage />} />
+          <Route path="/banners" element={<BannerListPage />} />
+          <Route path="/banners/:bannerId" element={<BannerDetailPage />} />
           <Route path="/tasks" element={<TaskListPage />} />
+          <Route path="/tasks/new" element={<TaskCreatePage />} />
           <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
           <Route path="/release-notes" element={<ReleaseNotesManager />} />
           <Route path="/ops" element={<MonitoringPageModule />} />
@@ -89,6 +94,7 @@ function resolveRouteMeta(pathname) {
   if (pathname.startsWith("/topic/")) return { title: "", parent: "主题地图发布管理", hideHeader: true };
   if (pathname.startsWith("/feedback/")) return { title: "", parent: "意见反馈管理", hideHeader: true };
   if (pathname.startsWith("/notifications/")) return { title: "", parent: "消息推送管理", hideHeader: true };
+  if (pathname.startsWith("/banners/")) return { title: "", parent: "通知公告管理", hideHeader: true };
   if (pathname.startsWith("/tasks")) return { title: "任务下发管理", parent: "" };
 
   const item = flattenedMenuItems.find((entry) => entry.path === pathname);
@@ -300,6 +306,13 @@ function NavIcon({ type }) {
             <path d="m13.2 13.2 1.1 1.1" />
             <path d="M4.5 10h1.6" />
             <path d="M13.9 10h1.6" />
+          </>
+        )}
+        {type === "banners" && (
+          <>
+            <rect x="3" y="4" width="14" height="12" rx="2" />
+            <path d="M3 8h14" />
+            <path d="M7 12h3" />
           </>
         )}
       </svg>

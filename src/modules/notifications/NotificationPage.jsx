@@ -24,6 +24,7 @@ const baseRecords = [
     createdAt: "2026-05-26 09:30",
     sentAt: "2026-05-26 09:35",
     readCount: 128,
+    coverImage: "",
   },
   {
     id: "MSG-002",
@@ -35,6 +36,7 @@ const baseRecords = [
     createdAt: "2026-05-25 16:45",
     sentAt: "2026-05-25 17:00",
     readCount: 210,
+    coverImage: "",
   },
   {
     id: "MSG-003",
@@ -46,6 +48,7 @@ const baseRecords = [
     createdAt: "2026-05-22 11:30",
     sentAt: "2026-05-22 11:35",
     readCount: 156,
+    coverImage: "",
   },
   {
     id: "MSG-004",
@@ -57,6 +60,7 @@ const baseRecords = [
     createdAt: "2026-05-20 15:40",
     sentAt: "",
     readCount: 0,
+    coverImage: "",
   },
   {
     id: "MSG-005",
@@ -68,6 +72,7 @@ const baseRecords = [
     createdAt: "2026-05-18 10:00",
     sentAt: "",
     readCount: 0,
+    coverImage: "",
   },
 ];
 
@@ -250,10 +255,21 @@ export function NotificationListPage() {
                 onClick={() => navigate(`/notifications/${rec.id}`)}
               >
                 <span className="cell-muted">{rec.id}</span>
-                <span className="notification-main">
+                <div className="notification-main">
                   <strong>{rec.title}</strong>
-                  <em>{rec.content}</em>
-                </span>
+                  {rec.coverImage ? (
+                    <div className="notification-main-preview">
+                      <img
+                        className="notification-thumb-small"
+                        src={rec.coverImage}
+                        alt={rec.title}
+                      />
+                      <em>{rec.content.substring(0, 80)}</em>
+                    </div>
+                  ) : (
+                    <em>{rec.content.substring(0, 80)}</em>
+                  )}
+                </div>
                 <span>{formatDate(rec.sentAt) || formatDate(rec.createdAt)}</span>
                 <span className="notification-read-count">
                   {rec.status === "草稿" ? "--" : rec.readCount}
@@ -344,8 +360,7 @@ export function NotificationDetailPage() {
 
   const detailFields = [
     { label: "消息编号", value: record.id },
-    { label: "创建时间", value: formatDate(record.createdAt) },
-    { label: "发送时间", value: formatDate(record.sentAt) || "未发送" },
+    { label: "发送时间", value: formatDate(record.sentAt) || formatDate(record.createdAt) },
   ];
 
   return (
@@ -428,6 +443,7 @@ function NotificationModal({ onClose, onSubmit }) {
   const [content, setContent] = useState("");
   const [tags, setTags] = useState([]);
   const [tagInput, setTagInput] = useState("");
+  const [coverImage, setCoverImage] = useState("");
   const [errors, setErrors] = useState({});
 
   const addTag = () => {
@@ -450,6 +466,14 @@ function NotificationModal({ onClose, onSubmit }) {
     return Object.keys(errs).length === 0;
   };
 
+  const handleCoverChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setCoverImage(reader.result);
+    reader.readAsDataURL(file);
+  };
+
   const handleSave = (status) => {
     if (!validate()) return;
     const now = formatTimestamp(new Date());
@@ -464,12 +488,13 @@ function NotificationModal({ onClose, onSubmit }) {
       createdAt: now,
       sentAt: status === "已发送" ? now : "",
       readCount: 0,
+      coverImage,
     });
   };
 
   return (
     <div className="export-modal-overlay" onClick={onClose}>
-      <div className="export-modal-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+      <div className="export-modal-card" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
         <div className="export-modal-header">
           <h3>新建消息</h3>
           <button type="button" className="export-modal-close" onClick={onClose}>×</button>
@@ -491,12 +516,40 @@ function NotificationModal({ onClose, onSubmit }) {
             <label>正文</label>
             <textarea
               className="textarea"
-              rows="8"
-              placeholder="请输入消息正文内容"
+              rows="10"
+              placeholder="请输入消息正文内容，内容贴合宣传口径，尽可能丰富一点"
               value={content}
               onChange={(e) => setContent(e.target.value)}
             />
             {errors.content && <span className="form-error">{errors.content}</span>}
+          </div>
+
+          <div className="form-block">
+            <label>封面图片</label>
+            <div className="banner-cover-upload">
+              {coverImage ? (
+                <div className="banner-cover-preview">
+                  <img src={coverImage} alt="封面预览" />
+                  <button
+                    type="button"
+                    className="banner-cover-remove"
+                    onClick={() => setCoverImage("")}
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <label className="banner-cover-trigger">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={handleCoverChange}
+                    hidden
+                  />
+                  <span>+ 选择封面图片</span>
+                </label>
+              )}
+            </div>
           </div>
 
           <div className="form-block">

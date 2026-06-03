@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ButtonIcon,
@@ -24,7 +24,7 @@ import {
   getCountyOptions,
   readUserRecords,
 } from "../_shared/userDirectory";
-import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Polygon, Polyline, Popup, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   PieChart, Pie, Cell, Tooltip as RechartsTooltip,
@@ -33,7 +33,7 @@ import {
 } from "recharts";
 import "./tasks.css";
 
-const storageKey = "tdt-task-dispatch-state-v6";
+const storageKey = "tdt-task-dispatch-state-v8";
 
 const TASK_STATUS = {
   DRAFT: "草稿",
@@ -50,6 +50,125 @@ const cityCodeMap = {
   襄阳市: "4206",
   鄂州市: "4207",
 };
+
+const spatialMapCenter = [30.5668, 114.3225];
+
+const spatialPlotTypes = [
+  { label: "地名地址", color: "#d97b54" },
+  { label: "公共服务", color: "#4d8b98" },
+  { label: "交通设施", color: "#d19d45" },
+  { label: "自然地物", color: "#6e995e" },
+];
+
+function buildMockSpatialPlots() {
+  return Array.from({ length: 30 }, (_, index) => {
+    const row = Math.floor(index / 6);
+    const col = index % 6;
+    const lat = spatialMapCenter[0] + (row - 2) * 0.009 + (col % 2) * 0.0018;
+    const lng = spatialMapCenter[1] + (col - 2.5) * 0.014 + (row % 2) * 0.0025;
+    const type = spatialPlotTypes[index % spatialPlotTypes.length];
+
+    return {
+      id: `POI-4201-${String(index + 101).padStart(3, "0")}`,
+      type: type.label,
+      color: type.color,
+      center: [lat, lng],
+    };
+  });
+}
+
+const mockSpatialPlots = buildMockSpatialPlots();
+
+function createMockSpatialSourceFiles() {
+  return [
+    {
+      id: "mock-spatial-wuhan-202606",
+      name: "武汉市2026年POI点位核查数据.shp",
+      size: 2.6 * 1024 * 1024,
+      sizeLabel: "2.6 MB",
+      plotCount: mockSpatialPlots.length,
+    },
+  ];
+}
+
+function isPointInsidePolygon(point, polygon) {
+  const [latitude, longitude] = point;
+  let inside = false;
+
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const [currentLat, currentLng] = polygon[index];
+    const [previousLat, previousLng] = polygon[previous];
+    const intersects =
+      currentLng > longitude !== previousLng > longitude &&
+      latitude < ((previousLat - currentLat) * (longitude - currentLng)) / (previousLng - currentLng) + currentLat;
+
+    if (intersects) inside = !inside;
+  }
+
+  return inside;
+}
+
+function getCoveredSpatialPlots(coordinates) {
+  return mockSpatialPlots.filter((plot) => isPointInsidePolygon(plot.center, coordinates));
+}
+
+function getSpatialAreaColor(index) {
+  return ["#316b9e", "#ca7956", "#638c65", "#97754b", "#7d6a9e"][index % 5];
+}
+
+function getPolygonCenter(coordinates) {
+  const total = coordinates.reduce(
+    (result, coordinate) => [result[0] + coordinate[0], result[1] + coordinate[1]],
+    [0, 0],
+  );
+  return [total[0] / coordinates.length, total[1] / coordinates.length];
+}
+
+function buildSeedDispatchAreas(inspectors, variant = 0) {
+  const areaShapes = [
+    [
+      [30.548, 114.266],
+      [30.575, 114.292],
+      [30.57, 114.334],
+      [30.532, 114.322],
+      [30.525, 114.282],
+    ],
+    [
+      [30.59, 114.306],
+      [30.622, 114.34],
+      [30.604, 114.39],
+      [30.565, 114.378],
+      [30.56, 114.326],
+    ],
+    [
+      [30.516, 114.33],
+      [30.548, 114.358],
+      [30.532, 114.414],
+      [30.493, 114.39],
+      [30.486, 114.344],
+    ],
+  ];
+  const plotGroups = [
+    ["TB-A001", "TB-A002", "TB-A003", "TB-A004", "TB-A005", "TB-A006"],
+    ["TB-B001", "TB-B002", "TB-B003", "TB-B004", "TB-B005"],
+    ["TB-C001", "TB-C002", "TB-C003", "TB-C004"],
+  ];
+
+  return areaShapes.map((coordinates, index) => {
+    const firstInspector = inspectors[(index + variant) % Math.max(inspectors.length, 1)]?.id;
+    const secondInspector = inspectors[(index + variant + 1) % Math.max(inspectors.length, 1)]?.id;
+    const recipientIds = Array.from(new Set([firstInspector, secondInspector].filter(Boolean)));
+
+    return {
+      id: `AREA-${String(index + 1).padStart(2, "0")}`,
+      name: `核查片区 ${String(index + 1).padStart(2, "0")}`,
+      color: getSpatialAreaColor(index + variant),
+      coordinates,
+      plotIds: plotGroups[index],
+      recipientIds,
+    };
+  });
+}
 
 function summarizeAreaKeys(areaKeys) {
   if (!areaKeys.length) return "-";
@@ -474,14 +593,17 @@ function createSeedTask(config, users) {
         }
       : null;
   }).filter(Boolean);
+  const dispatchAreas = config.dispatchAreas ?? buildSeedDispatchAreas(inspectorAssignments, config.areaVariant ?? 0);
+  const targetAreaSummary = `${summarizeAreaKeys(config.targetAreas)} · ${dispatchAreas.length} 个片区`;
 
   return {
     id: config.id,
     title: config.title,
     description: config.description,
     sourceLevel: "省级下发",
+    spatialMode: config.spatialMode ?? "plot",
     targetAreas: config.targetAreas,
-    targetAreaSummary: summarizeAreaKeys(config.targetAreas),
+    targetAreaSummary,
     targetCities: getSelectedCitiesFromAreaKeys(config.targetAreas),
     sourceFiles: config.sourceFiles,
     sourceSummary: summarizeSourceFiles(config.sourceFiles),
@@ -505,8 +627,9 @@ function createSeedTask(config, users) {
       assigneeCount: inspectorAssignments.length,
       plotCount: config.plotCount,
       completedPlots: config.completedPlots,
-      targetAreaSummary: summarizeAreaKeys(config.targetAreas),
+      targetAreaSummary,
     }),
+    dispatchAreas,
     inspectors: inspectorAssignments,
     plots: buildSamplePlots({
       selectedAreaKeys: config.targetAreas,
@@ -664,12 +787,37 @@ function buildInitialTasks(users) {
   ];
 }
 
+function isTemporaryTask111(task) {
+  return [task.id, task.title, task.name]
+    .filter(Boolean)
+    .map((value) => String(value).trim())
+    .some((value) => value === "111");
+}
+
+function hydrateStoredTaskAreas(task, seedMap) {
+  const seedTask = seedMap.get(task.id);
+  if (!seedTask) return task;
+
+  const hasDispatchAreas = Array.isArray(task.dispatchAreas) && task.dispatchAreas.length > 0;
+  if (hasDispatchAreas) return task;
+
+  return {
+    ...task,
+    spatialMode: task.spatialMode ?? seedTask.spatialMode,
+    targetAreaSummary: seedTask.targetAreaSummary,
+    dispatchAreas: seedTask.dispatchAreas,
+    cityAssignments: seedTask.cityAssignments,
+    inspectors: task.inspectors?.length ? task.inspectors : seedTask.inspectors,
+    plots: task.plots?.length ? task.plots : seedTask.plots,
+  };
+}
+
 function readStoredTasks(users) {
   if (typeof window === "undefined") return buildInitialTasks(users).map(normalizeTaskRecord);
 
   // Clear old storage keys
   try {
-    for (let i = 1; i < 6; i++) {
+    for (let i = 1; i <= 7; i++) {
       const oldKey = `tdt-task-dispatch-state-v${i}`;
       if (window.localStorage.getItem(oldKey)) {
         window.localStorage.removeItem(oldKey);
@@ -682,7 +830,12 @@ function readStoredTasks(users) {
   try {
     const stored = JSON.parse(window.localStorage.getItem(storageKey) ?? "null");
     if (Array.isArray(stored) && stored.every((item) => item?.id && item?.targetAreas && item?.sourceFiles)) {
-      return stored.map(normalizeTaskRecord);
+      const seedTasks = buildInitialTasks(users);
+      const seedMap = new Map(seedTasks.map((task) => [task.id, task]));
+      return stored
+        .filter((item) => !isTemporaryTask111(item))
+        .map((item) => hydrateStoredTaskAreas(item, seedMap))
+        .map(normalizeTaskRecord);
     }
   } catch {
     return buildInitialTasks(users).map(normalizeTaskRecord);
@@ -744,13 +897,12 @@ function buildTaskPrimaryAction(task, updateTask) {
 export function TaskListPage() {
   const navigate = useNavigate();
   const roleUsers = useMemo(() => readUserRecords(), []);
-  const { records, updateTask, createTask } = useTaskRecords(roleUsers);
+  const { records, updateTask } = useTaskRecords(roleUsers);
   const [searchValue, setSearchValue] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [selectedCities, setSelectedCities] = useState([]);
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
-  const [createOpen, setCreateOpen] = useState(false);
 
   const cityOptions = useMemo(
     () => Array.from(new Set(records.flatMap((task) => task.targetCities))).filter(Boolean),
@@ -799,13 +951,6 @@ export function TaskListPage() {
   const safePage = Math.min(currentPage, totalPages);
   const pageRecords = filteredRecords.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  const handleCreateTask = (draft, submitMode = "draft") => {
-    const nextTask = createTaskFromDraft(draft, roleUsers, submitMode);
-    createTask(nextTask);
-    setCreateOpen(false);
-    showToast(submitMode === "dispatch" ? "任务已保存并下发" : "任务草稿已创建");
-  };
-
   return (
     <div className="page-content page-content--list tasks-page">
       <ListShell
@@ -819,7 +964,7 @@ export function TaskListPage() {
           />
         )}
         actions={(
-          <button type="button" className="primary-button" onClick={() => setCreateOpen(true)}>
+          <button type="button" className="primary-button" onClick={() => navigate("/tasks/new")}>
             新建任务
           </button>
         )}
@@ -921,13 +1066,547 @@ export function TaskListPage() {
         </div>
       </ListShell>
 
-      {createOpen ? (
-        <TaskCreateModal
-          users={roleUsers}
-          onClose={() => setCreateOpen(false)}
-          onSubmit={handleCreateTask}
-        />
-      ) : null}
+    </div>
+  );
+}
+
+function SpatialAreaDrawController({ active, onAppendVertex, onMoveCursor, onFinish }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    container.classList.toggle("task-spatial-map--drawing", active);
+    if (active) map.doubleClickZoom.disable();
+    else map.doubleClickZoom.enable();
+
+    return () => {
+      container.classList.remove("task-spatial-map--drawing");
+      map.doubleClickZoom.enable();
+    };
+  }, [active, map]);
+
+  useMapEvents({
+    click(event) {
+      if (!active || event.originalEvent?.detail > 1) return;
+      onAppendVertex([event.latlng.lat, event.latlng.lng]);
+    },
+    mousemove(event) {
+      if (!active) return;
+      onMoveCursor([event.latlng.lat, event.latlng.lng]);
+    },
+    dblclick(event) {
+      if (!active) return;
+      event.originalEvent?.preventDefault();
+      event.originalEvent?.stopPropagation();
+      onFinish([event.latlng.lat, event.latlng.lng]);
+    },
+  });
+
+  return null;
+}
+
+function summarizeSpatialRecipients(recipientIds, users) {
+  const recipients = users.filter((user) => recipientIds.includes(user.id));
+  if (!recipients.length) return "尚未指派执行人员";
+  if (recipients.length <= 2) return recipients.map((user) => user.nickname).join("、");
+  return `${recipients.slice(0, 2).map((user) => user.nickname).join("、")} 等 ${recipients.length} 人`;
+}
+
+function createSpatialTaskFromDraft(draft, users, submitMode) {
+  const isDispatchMode = submitMode === "dispatch";
+  const recipientIds = Array.from(new Set(draft.dispatchAreas.flatMap((area) => area.recipientIds)));
+  const recipients = users.filter((user) => recipientIds.includes(user.id));
+  const managerNames = recipients.filter((user) => user.role.endsWith("管理员")).map((user) => user.nickname);
+  const coveredPlotIds = Array.from(new Set(draft.dispatchAreas.flatMap((area) => area.plotIds)));
+  const plotCount = coveredPlotIds.length;
+  const targetAreas = [buildAreaKey("武汉市", ALL_COUNTIES)];
+  const targetAreaSummary = `${draft.dispatchAreas.length} 个空间片区 · 覆盖 ${plotCount} 个 POI 点位`;
+  const nextStatus = isDispatchMode ? TASK_STATUS.DISPATCHED : TASK_STATUS.DRAFT;
+  const inspectorAssignments = recipients.map((user) => {
+    const userAreaPlotIds = Array.from(new Set(
+      draft.dispatchAreas
+        .filter((area) => area.recipientIds.includes(user.id))
+        .flatMap((area) => area.plotIds),
+    ));
+
+    return {
+      id: user.id,
+      name: user.nickname,
+      county: user.county,
+      role: user.role,
+      plots: userAreaPlotIds.length,
+      completed: 0,
+      status: isDispatchMode ? "待核查" : "待接收",
+    };
+  });
+
+  return {
+    id: `TASK-${String(Date.now()).slice(-6)}`,
+    title: draft.title.trim(),
+    description:
+      draft.requirement.trim() ||
+      `围绕 ${targetAreaSummary} 开展空间核查，逐一校验点位的位置、名称和分类信息。`,
+    sourceLevel: "空间片区下发",
+    spatialMode: "poi",
+    targetAreas,
+    targetAreaSummary,
+    targetCities: ["武汉市"],
+    sourceFiles: draft.sourceFiles,
+    sourceSummary: summarizeSourceFiles(draft.sourceFiles),
+    managerIds: recipients.filter((user) => user.role.endsWith("管理员")).map((user) => user.id),
+    managerNames,
+    managerSummary: managerNames.length ? managerNames.join("、") : "-",
+    plotCount,
+    completedPlots: 0,
+    assigneeCount: recipients.length,
+    deadline: draft.deadline.replace("T", " "),
+    status: nextStatus,
+    createdAt: formatTimestamp(new Date()),
+    dispatchedAt: isDispatchMode ? formatTimestamp(new Date()) : "-",
+    submittedAt: "-",
+    platformUpdatedAt: "-",
+    requirement:
+      draft.requirement.trim() ||
+      "请结合片区边界逐一核查区域内 POI 点位，记录核查结论、现场说明与定位照片。",
+    progressNote: buildTaskProgressNote(nextStatus, 0, plotCount),
+    cityAssignments: buildCityAssignments({
+      status: nextStatus,
+      managerNames,
+      assigneeCount: recipients.length,
+      plotCount,
+      completedPlots: 0,
+      targetAreaSummary,
+    }),
+    dispatchAreas: draft.dispatchAreas,
+    inspectors: inspectorAssignments,
+    plots: buildSamplePlots({
+      selectedAreaKeys: targetAreas,
+      plotCount,
+      inspectors: inspectorAssignments,
+      status: isDispatchMode ? "待核查" : TASK_STATUS.DRAFT,
+    }),
+  };
+}
+
+export function TaskCreatePage() {
+  const navigate = useNavigate();
+  const users = useMemo(() => readUserRecords(), []);
+  const { createTask } = useTaskRecords(users);
+  const sideScrollRef = useRef(null);
+  const areaSectionRef = useRef(null);
+  const [draft, setDraft] = useState(() => ({
+    title: "武汉市 6 月 POI 点位核查",
+    deadline: "2026-06-20T18:00",
+    requirement: "请逐一核验片区内 POI 点位的位置、名称和分类信息，发现问题时补充现场说明，并上传定位照片。",
+    sourceFiles: createMockSpatialSourceFiles(),
+    dispatchAreas: [],
+  }));
+  const [drawingActive, setDrawingActive] = useState(false);
+  const [drawingVertices, setDrawingVertices] = useState([]);
+  const [drawingCursor, setDrawingCursor] = useState(null);
+  const [selectedAreaId, setSelectedAreaId] = useState("");
+  const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
+  const [recipientKeyword, setRecipientKeyword] = useState("");
+
+  const selectedArea = draft.dispatchAreas.find((area) => area.id === selectedAreaId) ?? null;
+  const availableRecipients = useMemo(
+    () => users.filter((user) => ["市级职员", "县级职员"].includes(user.role)),
+    [users],
+  );
+  const filteredRecipients = availableRecipients.filter((user) => (
+    user.nickname.toLowerCase().includes(recipientKeyword.trim().toLowerCase())
+  ));
+  const selectedPlotIds = new Set(selectedArea?.plotIds ?? []);
+
+  useEffect(() => {
+    if (!draft.dispatchAreas.length) return;
+    sideScrollRef.current?.scrollTo({
+      top: areaSectionRef.current?.offsetTop ?? 0,
+      behavior: "smooth",
+    });
+  }, [draft.dispatchAreas.length]);
+
+  const updateDraft = (patch) => setDraft((current) => ({ ...current, ...patch }));
+
+  const updateSelectedArea = (patch) => {
+    if (!selectedAreaId) return;
+    setDraft((current) => ({
+      ...current,
+      dispatchAreas: current.dispatchAreas.map((area) => (
+        area.id === selectedAreaId ? { ...area, ...patch } : area
+      )),
+    }));
+  };
+
+  const startDrawing = () => {
+    setDrawingVertices([]);
+    setDrawingCursor(null);
+    setRecipientPickerOpen(false);
+    setDrawingActive(true);
+    showToast("请在地图上依次点击片区边界点");
+  };
+
+  const cancelDrawing = () => {
+    setDrawingVertices([]);
+    setDrawingCursor(null);
+    setDrawingActive(false);
+  };
+
+  const finishDrawing = (lastCoordinate = null) => {
+    const lastVertex = drawingVertices[drawingVertices.length - 1];
+    const shouldAppendLastCoordinate =
+      lastCoordinate &&
+      (!lastVertex || lastVertex[0] !== lastCoordinate[0] || lastVertex[1] !== lastCoordinate[1]);
+    const completedVertices = shouldAppendLastCoordinate
+      ? [...drawingVertices, lastCoordinate]
+      : drawingVertices;
+
+    if (completedVertices.length < 3) {
+      showToast("至少需要 3 个边界点才能生成片区", "warning");
+      return;
+    }
+
+    const coveredPlots = getCoveredSpatialPlots(completedVertices);
+    if (!coveredPlots.length) {
+      showToast("当前片区未覆盖 POI 点位，请重新绘制", "warning");
+      return;
+    }
+
+    const index = draft.dispatchAreas.length;
+    const nextArea = {
+      id: `AREA-${String(index + 1).padStart(2, "0")}`,
+      name: `核查片区 ${String(index + 1).padStart(2, "0")}`,
+      color: getSpatialAreaColor(index),
+      coordinates: completedVertices,
+      plotIds: coveredPlots.map((plot) => plot.id),
+      recipientIds: [],
+    };
+
+    setDraft((current) => ({ ...current, dispatchAreas: [...current.dispatchAreas, nextArea] }));
+    setSelectedAreaId(nextArea.id);
+    setRecipientKeyword("");
+    setRecipientPickerOpen(true);
+    cancelDrawing();
+    showToast(`片区已生成，覆盖 ${coveredPlots.length} 个 POI 点位`);
+  };
+
+  const removeSelectedArea = () => {
+    if (!selectedArea) return;
+    setDraft((current) => ({
+      ...current,
+      dispatchAreas: current.dispatchAreas.filter((area) => area.id !== selectedArea.id),
+    }));
+    setSelectedAreaId("");
+    setRecipientPickerOpen(false);
+  };
+
+  const handleFilesSelected = (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    setDraft((current) => ({
+      ...current,
+      sourceFiles: files.map((file) => createSourceFileRecord(file, 1)),
+    }));
+    event.target.value = "";
+    showToast("SHP 文件已载入，当前原型继续使用模拟 POI 点位进行空间编排");
+  };
+
+  const openRecipientPicker = () => {
+    setRecipientKeyword("");
+    setRecipientPickerOpen(true);
+  };
+
+  const toggleRecipient = (userId) => {
+    if (!selectedArea) return;
+    const recipientIds = selectedArea.recipientIds.includes(userId)
+      ? selectedArea.recipientIds.filter((id) => id !== userId)
+      : [...selectedArea.recipientIds, userId];
+    updateSelectedArea({ recipientIds });
+  };
+
+  const handleSubmit = (submitMode) => {
+    if (!draft.title.trim()) {
+      showToast("请填写任务名称", "warning");
+      return;
+    }
+    if (!draft.sourceFiles.length) {
+      showToast("请先上传 SHP 点位文件", "warning");
+      return;
+    }
+    if (!draft.dispatchAreas.length) {
+      showToast("请至少绘制 1 个核查片区", "warning");
+      return;
+    }
+    if (draft.dispatchAreas.some((area) => !area.recipientIds.length)) {
+      showToast("每个片区都需要指定执行人员", "warning");
+      return;
+    }
+
+    createTask(createSpatialTaskFromDraft(draft, users, submitMode));
+    showToast(submitMode === "dispatch" ? "空间任务已下发" : "空间任务草稿已保存");
+    navigate("/tasks");
+  };
+
+  return (
+    <div className="page-content task-spatial-create-page">
+      <section className="topic-detail-header task-spatial-header">
+        <div className="topic-detail-heading">
+          <button type="button" className="icon-back-button" onClick={() => navigate("/tasks")} aria-label="返回">
+            <ButtonIcon type="back" />
+          </button>
+          <div className="task-spatial-heading-copy">
+            <h2>新建核查任务</h2>
+          </div>
+        </div>
+        <div className="topic-detail-toolbar">
+          <button type="button" className="ghost-button slim-button" onClick={() => handleSubmit("draft")}>保存草稿</button>
+          <button type="button" className="primary-button slim-button" onClick={() => handleSubmit("dispatch")}>确认并下发</button>
+        </div>
+      </section>
+
+      <section className="task-spatial-workbench">
+        <div className="task-spatial-map-shell">
+          <MapContainer center={spatialMapCenter} zoom={13} className="task-spatial-map" scrollWheelZoom>
+            <MapResizeHelper />
+            <SpatialAreaDrawController
+              active={drawingActive}
+              onAppendVertex={(coordinate) => setDrawingVertices((current) => [...current, coordinate])}
+              onMoveCursor={setDrawingCursor}
+              onFinish={finishDrawing}
+            />
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            {mockSpatialPlots.map((plot) => (
+              <CircleMarker
+                key={plot.id}
+                center={plot.center}
+                radius={selectedPlotIds.has(plot.id) ? 10 : 8}
+                pathOptions={{
+                  color: "#ffffff",
+                  weight: selectedPlotIds.has(plot.id) ? 3 : 2.5,
+                  fillColor: plot.color,
+                  fillOpacity: 0.96,
+                  className: selectedPlotIds.has(plot.id) ? "task-spatial-poi selected" : "task-spatial-poi",
+                }}
+              >
+                <Tooltip direction="top">{plot.id} · {plot.type}</Tooltip>
+              </CircleMarker>
+            ))}
+            {draft.dispatchAreas.map((area) => (
+              <Polygon
+                key={area.id}
+                positions={area.coordinates}
+                eventHandlers={{ click: () => setSelectedAreaId(area.id) }}
+                pathOptions={{
+                  color: area.color,
+                  weight: selectedAreaId === area.id ? 4 : 3,
+                  dashArray: area.recipientIds.length ? undefined : "8 7",
+                  fillColor: area.color,
+                  fillOpacity: selectedAreaId === area.id ? 0.22 : 0.12,
+                }}
+              >
+                <Tooltip sticky>{area.name} · {area.plotIds.length} 个 POI 点位</Tooltip>
+              </Polygon>
+            ))}
+            {drawingVertices.length >= 3 ? (
+              <Polygon
+                positions={drawingVertices}
+                pathOptions={{ color: "#1e5f8f", weight: 3, dashArray: "7 6", fillColor: "#1e5f8f", fillOpacity: 0.16 }}
+              />
+            ) : null}
+            {drawingVertices.length >= 2 ? (
+              <Polyline
+                positions={drawingVertices}
+                pathOptions={{ color: "#1e5f8f", weight: 3, opacity: 0.96 }}
+              />
+            ) : null}
+            {drawingVertices.map((coordinate, index) => (
+              <CircleMarker
+                key={`${coordinate[0]}-${coordinate[1]}-${index}`}
+                center={coordinate}
+                radius={5}
+                pathOptions={{ color: "#ffffff", weight: 2, fillColor: "#1e5f8f", fillOpacity: 1 }}
+              />
+            ))}
+            {drawingActive && drawingVertices.length && drawingCursor ? (
+              <Polyline
+                positions={[drawingVertices[drawingVertices.length - 1], drawingCursor]}
+                pathOptions={{ color: "#1e5f8f", weight: 2, dashArray: "6 7", opacity: 0.92 }}
+              />
+            ) : null}
+          </MapContainer>
+
+          {recipientPickerOpen && selectedArea ? (
+            <div
+              className="task-spatial-recipient-float"
+              onClick={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => event.stopPropagation()}
+            >
+              <button type="button" className="task-spatial-popup-close" onClick={() => setRecipientPickerOpen(false)}>×</button>
+              <div className="task-spatial-popup-content">
+                <div className="task-spatial-popup-head">
+                  <strong>选择执行人员</strong>
+                  <span>{selectedArea.name} · {selectedArea.plotIds.length} 个 POI 点位</span>
+                </div>
+                <input
+                  className="task-spatial-popup-search"
+                  value={recipientKeyword}
+                  placeholder="按姓名筛选"
+                  onChange={(event) => setRecipientKeyword(event.target.value)}
+                />
+                <div className="task-spatial-popup-list">
+                  {filteredRecipients.map((user) => (
+                    <label key={user.id} className="task-spatial-popup-option">
+                      <input
+                        type="checkbox"
+                        checked={selectedArea.recipientIds.includes(user.id)}
+                        onChange={() => toggleRecipient(user.id)}
+                      />
+                      <span>
+                        <strong>{user.nickname}</strong>
+                        <em>{user.role} · {user.city} / {user.county}</em>
+                      </span>
+                    </label>
+                  ))}
+                  {!filteredRecipients.length ? (
+                    <div className="task-spatial-popup-empty">没有匹配的执行人员</div>
+                  ) : null}
+                </div>
+                <div className="task-spatial-popup-footer">
+                  <span>已选 {selectedArea.recipientIds.length} 人</span>
+                  <button type="button" onClick={() => setRecipientPickerOpen(false)}>完成</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="task-spatial-map-toolbar">
+            {!drawingActive ? (
+              <button type="button" className="task-spatial-draw-button" onClick={startDrawing}>
+                <span className="task-spatial-draw-icon">＋</span>
+                绘制新片区
+              </button>
+            ) : (
+              <>
+                <div className="task-spatial-drawing-hint">已标记 {drawingVertices.length} 个边界点 · 双击完成绘制</div>
+                <button type="button" className="task-spatial-tool-button" onClick={cancelDrawing}>取消</button>
+              </>
+            )}
+          </div>
+
+          <div className="task-spatial-map-legend">
+            {spatialPlotTypes.map((type) => (
+              <span key={type.label}><i style={{ background: type.color }} />{type.label}</span>
+            ))}
+          </div>
+        </div>
+
+        <aside className="task-spatial-side">
+          <div className="task-spatial-side-scroll" ref={sideScrollRef}>
+            <section className="task-spatial-side-section">
+              <div className="task-spatial-section-head">
+                <strong>任务设置</strong>
+                <span>填写基本信息并载入 POI 点位数据</span>
+              </div>
+              <div className="form-block">
+                <label><span className="form-required">*</span>任务名称</label>
+                <input className="input" value={draft.title} onChange={(event) => updateDraft({ title: event.target.value })} />
+              </div>
+              <div className="form-block">
+                <label><span className="form-required">*</span>截止时间</label>
+                <input className="input" type="datetime-local" value={draft.deadline} onChange={(event) => updateDraft({ deadline: event.target.value })} />
+              </div>
+              <div className="form-block">
+                <label><span className="form-required">*</span>点位文件</label>
+                <label className="task-spatial-upload">
+                  <input type="file" accept=".zip,.shp,.dbf,.shx,.prj" multiple onChange={handleFilesSelected} />
+                  <span>重新上传 SHP 点位文件</span>
+                  <em>{draft.sourceFiles.map((file) => file.name).join("、")}</em>
+                </label>
+              </div>
+              <div className="form-block">
+                <label>核查要求</label>
+                <textarea className="textarea" rows="3" value={draft.requirement} onChange={(event) => updateDraft({ requirement: event.target.value })} />
+              </div>
+            </section>
+
+            <section className="task-spatial-side-section task-spatial-area-section" ref={areaSectionRef}>
+              <div className="task-spatial-section-head task-spatial-section-head-row">
+                <div>
+                  <strong>片区编排</strong>
+                  <span>绘制片区后逐一指定执行人员</span>
+                </div>
+                <b>{draft.dispatchAreas.length}</b>
+              </div>
+              <div className="task-spatial-area-list">
+                {draft.dispatchAreas.length ? draft.dispatchAreas.map((area) => (
+                  <button
+                    key={area.id}
+                    type="button"
+                    className={`task-spatial-area-card${selectedAreaId === area.id ? " active" : ""}`}
+                    onClick={() => setSelectedAreaId(area.id)}
+                  >
+                    <i style={{ background: area.color }} />
+                    <span>
+                      <strong>{area.name}</strong>
+                      <em>{area.plotIds.length} 个 POI 点位 · {summarizeSpatialRecipients(area.recipientIds, users)}</em>
+                    </span>
+                    <b className={area.recipientIds.length ? "assigned" : "pending"}>
+                      {area.recipientIds.length ? "已指派" : "待指派"}
+                    </b>
+                  </button>
+                )) : (
+                  <div className="task-spatial-empty">
+                    <strong>还没有核查片区</strong>
+                    <span>点击地图左上角“绘制新片区”，围绕 POI 点位勾勒边界。</span>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {selectedArea ? (
+              <section className="task-spatial-side-section task-spatial-editor">
+                <div className="task-spatial-section-head task-spatial-section-head-row">
+                  <div>
+                    <strong>片区配置</strong>
+                    <span>{selectedArea.id}</span>
+                  </div>
+                  <button type="button" className="task-spatial-delete" onClick={removeSelectedArea}>删除片区</button>
+                </div>
+                <div className="form-block">
+                  <label>片区名称</label>
+                  <input className="input" value={selectedArea.name} onChange={(event) => updateSelectedArea({ name: event.target.value })} />
+                </div>
+                <div className="task-spatial-area-metrics">
+                  <div><strong>{selectedArea.plotIds.length}</strong><span>覆盖点位</span></div>
+                  <div><strong>{selectedArea.recipientIds.length}</strong><span>执行人数</span></div>
+                </div>
+                <div className="task-spatial-recipient-head">
+                  <div>
+                    <strong>执行人员</strong>
+                    <span>支持一个片区选择多人协同核查</span>
+                  </div>
+                  <button type="button" className="ghost-button slim-button" onClick={openRecipientPicker}>选择人员</button>
+                </div>
+                <div className="task-spatial-recipient-list">
+                  {selectedArea.recipientIds.length ? users
+                    .filter((user) => selectedArea.recipientIds.includes(user.id))
+                    .map((user) => (
+                      <div key={user.id}>
+                        <strong>{user.nickname}</strong>
+                        <span>{user.role} · {user.city} / {user.county}</span>
+                      </div>
+                    )) : <em>当前片区还没有指定执行人员</em>}
+                </div>
+              </section>
+            ) : null}
+          </div>
+        </aside>
+      </section>
+
     </div>
   );
 }
@@ -951,9 +1630,95 @@ function FlyToController({ spot }) {
   return null;
 }
 
+const taskSpotResultMeta = {
+  correct: { label: "正确", color: "#7d95ef" },
+  incorrect: { label: "错误", color: "#e08a6d" },
+  pending: { label: "待核查", color: "#e0c87d" },
+  added: { label: "新增核查图斑", color: "#2fa36b" },
+};
+
+function getTaskSpotResultMeta(result) {
+  return taskSpotResultMeta[result] ?? taskSpotResultMeta.pending;
+}
+
+function createInspectionNotes(result, featureType) {
+  if (result === "added") return `移动端新增${featureType}，已补充分类、名称和标签信息`;
+  if (result === "incorrect") return `${featureType}核查与底图不符，需复核边界`;
+  if (result === "pending") return "待核查确认";
+  return `${featureType}核查结果与底图一致`;
+}
+
+function createInspectionPhotos(result, id) {
+  if (result === "pending") return [];
+  return [{ id: `${id}-photo-1`, label: "现场照片 1" }];
+}
+
 function generateMockSpots(task) {
+  if (task.spatialMode === "poi" && task.dispatchAreas?.length) {
+    const coveredPlotIds = new Set(task.dispatchAreas.flatMap((area) => area.plotIds));
+    const sourceFileId = task.sourceFiles[0]?.id ?? "spatial-poi-source";
+
+    return mockSpatialPlots
+      .filter((plot) => coveredPlotIds.has(plot.id))
+      .map((plot, index) => {
+        const baseInspectionResult =
+          task.status === TASK_STATUS.DONE
+            ? index % 5 === 0 ? "incorrect" : "correct"
+            : task.status === TASK_STATUS.IN_PROGRESS
+              ? index % 3 === 0 ? "pending" : index % 5 === 0 ? "incorrect" : "correct"
+              : "pending";
+        const inspectionResult =
+          task.status !== TASK_STATUS.DRAFT && task.status !== TASK_STATUS.DISPATCHED && index % 11 === 0
+            ? "added"
+            : baseInspectionResult;
+
+        return {
+          id: plot.id,
+          sourceFileId,
+          coordinate: plot.center,
+          featureType: plot.type,
+          inspectionResult,
+          inspectionNotes: createInspectionNotes(inspectionResult, plot.type),
+          photos: createInspectionPhotos(inspectionResult, plot.id),
+        };
+      });
+  }
+
+  if (task.dispatchAreas?.length) {
+    const results = task.status === TASK_STATUS.DRAFT
+      ? ["pending"]
+      : task.status === TASK_STATUS.DISPATCHED
+        ? ["pending"]
+        : task.status === TASK_STATUS.DONE
+          ? ["correct", "correct", "incorrect", "added"]
+          : ["correct", "pending", "incorrect", "added"];
+    const featureTypes = ["新增建设", "疑似占地", "边界变化", "用地类型变化", "耕地变化", "建设用地图斑"];
+    const files = task.sourceFiles.length ? task.sourceFiles : [{ id: "seed-spatial-source" }];
+
+    return task.dispatchAreas.flatMap((area, areaIndex) => {
+      const center = getPolygonCenter(area.coordinates);
+      return area.plotIds.map((plotId, plotIndex) => {
+        const ring = plotIndex + 1;
+        const latOffset = ((ring % 4) - 1.5) * 0.0048 + areaIndex * 0.0008;
+        const lngOffset = (Math.floor(ring / 4) - 1) * 0.0062 + areaIndex * 0.0011;
+        const result = results[(plotIndex + areaIndex) % results.length];
+        const featureType = featureTypes[(plotIndex + areaIndex) % featureTypes.length];
+
+        return {
+          id: `${task.id}-${plotId}`,
+          sourceFileId: files[(plotIndex + areaIndex) % files.length].id,
+          coordinate: [center[0] + latOffset, center[1] + lngOffset],
+          featureType,
+          inspectionResult: result,
+          inspectionNotes: createInspectionNotes(result, featureType),
+          photos: createInspectionPhotos(result, plotId),
+        };
+      });
+    });
+  }
+
   const center = [30.5931, 114.3048];
-  const results = ["correct", "incorrect", "pending"];
+  const results = ["correct", "incorrect", "pending", "added"];
   const featureTypes = [
     "新增建设", "疑似占地", "边界变化", "用地类型变化",
     "耕地变化", "林地变化", "水域变化", "建设用地图斑",
@@ -973,26 +1738,15 @@ function generateMockSpots(task) {
       const lat = center[0] + (Math.random() - 0.5) * 0.08;
       const lng = center[1] + (Math.random() - 0.5) * 0.12;
       const ft = featureTypes[i % featureTypes.length];
-      const result = results[i % 3];
-      const photoCount = 1 + Math.floor(Math.random() * 3);
-      const photos = Array.from({ length: photoCount }, (_, pi) => ({
-        id: `photo-${i}-${pi}`,
-        label: `现场照片 ${pi + 1}`,
-      }));
-
+      const result = results[i % results.length];
       spots.push({
         id: `${task.id}-SPOT-${String(i + 1).padStart(3, "0")}`,
         sourceFileId: fileId,
         coordinate: [lat, lng],
         featureType: ft,
         inspectionResult: result,
-        inspectionNotes:
-          result === "incorrect"
-            ? `${ft}核查与底图不符，存在偏差`
-            : result === "pending"
-              ? "待核查确认"
-              : `${ft}核查结果与底图一致`,
-        photos,
+        inspectionNotes: createInspectionNotes(result, ft),
+        photos: createInspectionPhotos(result, `${task.id}-SPOT-${String(i + 1).padStart(3, "0")}`),
       });
     }
   });
@@ -1004,6 +1758,7 @@ function generateChartData(task, spots) {
     { name: "正确", value: spots.filter((s) => s.inspectionResult === "correct").length, fill: "#7d95ef" },
     { name: "错误", value: spots.filter((s) => s.inspectionResult === "incorrect").length, fill: "#e08a6d" },
     { name: "待核查", value: spots.filter((s) => s.inspectionResult === "pending").length, fill: "#e0c87d" },
+    { name: "新增核查图斑", value: spots.filter((s) => s.inspectionResult === "added").length, fill: "#2fa36b" },
   ].filter((d) => d.value > 0);
 
   const inspectorCompletion = task.inspectors.map((insp) => ({
@@ -1065,6 +1820,9 @@ export function TaskDetailPage() {
   const [spotTablePage, setSpotTablePage] = useState(1);
 
   const spots = useMemo(() => generateMockSpots(task), [task]);
+  const dispatchAreas = task.dispatchAreas ?? [];
+  const isPoiTask = task.spatialMode === "poi";
+  const areaUnitLabel = isPoiTask ? "POI 点位" : "图斑";
   const chartData = useMemo(() => generateChartData(task, spots), [task, spots]);
   const mapCenter = useMemo(
     () => (spots.length > 0 ? spots[Math.floor(spots.length / 2)].coordinate : [30.5931, 114.3048]),
@@ -1130,7 +1888,7 @@ export function TaskDetailPage() {
                   <div className="task-detail-form-value">{formatDate(task.deadline)}</div>
                 </div>
                 <div className="task-detail-form-group">
-                  <label className="task-detail-form-label">图斑数据</label>
+                  <label className="task-detail-form-label">{isPoiTask ? "POI 点位数据" : "图斑数据"}</label>
                   <div className="task-detail-form-value">
                     {task.sourceFiles.map((file, i) => (
                       <span key={file.id}>{i > 0 ? "；" : ""}{file.name}</span>
@@ -1147,11 +1905,27 @@ export function TaskDetailPage() {
                     {task.inspectors.map((insp) => (
                       <div key={insp.id} className="task-detail-inspector-row">
                         <strong>{insp.name}</strong>
-                        <span>{insp.county}<span className="task-detail-plot-badge">图斑 {insp.plots}</span></span>
+                        <span>{insp.county}<span className="task-detail-plot-badge">{isPoiTask ? "点位" : "图斑"} {insp.plots}</span></span>
                       </div>
                     ))}
                   </div>
                 </div>
+                {dispatchAreas.length ? (
+                  <div className="task-detail-form-group">
+                    <label className="task-detail-form-label">核查片区</label>
+                    <div className="task-detail-area-list">
+                      {dispatchAreas.map((area) => (
+                        <div key={area.id} className="task-detail-area-row">
+                          <i style={{ background: area.color }} />
+                          <span>
+                            <strong>{area.name}</strong>
+                            <em>{area.plotIds.length} 个{areaUnitLabel} · {summarizeSpatialRecipients(area.recipientIds, roleUsers)}</em>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <div className="task-detail-map-column">
@@ -1168,6 +1942,20 @@ export function TaskDetailPage() {
                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
+                    {dispatchAreas.map((area) => (
+                      <Polygon
+                        key={area.id}
+                        positions={area.coordinates}
+                        pathOptions={{
+                          color: area.color,
+                          weight: 3,
+                          fillColor: area.color,
+                          fillOpacity: 0.16,
+                        }}
+                      >
+                        <Tooltip sticky>{area.name} · {area.plotIds.length} 个{areaUnitLabel}</Tooltip>
+                      </Polygon>
+                    ))}
                     {spots.map((spot) => (
                       <CircleMarker
                         key={spot.id}
@@ -1176,10 +1964,7 @@ export function TaskDetailPage() {
                         pathOptions={{
                           color: "#3a3a3a",
                           weight: 1.5,
-                          fillColor:
-                            spot.inspectionResult === "correct" ? "#7d95ef"
-                            : spot.inspectionResult === "incorrect" ? "#e08a6d"
-                            : "#e0c87d",
+                          fillColor: getTaskSpotResultMeta(spot.inspectionResult).color,
                           fillOpacity: 0.9,
                         }}
                       >
@@ -1191,7 +1976,7 @@ export function TaskDetailPage() {
                             <div className="task-spot-popup-row">
                               <span>核查结果</span>
                               <span className={`task-spot-result-tag ${spot.inspectionResult}`}>
-                                {spot.inspectionResult === "correct" ? "正确" : spot.inspectionResult === "incorrect" ? "错误" : "待核查"}
+                                {getTaskSpotResultMeta(spot.inspectionResult).label}
                               </span>
                             </div>
                             <div className="task-spot-popup-row"><span>核查备注</span><span>{spot.inspectionNotes}</span></div>
@@ -1203,7 +1988,17 @@ export function TaskDetailPage() {
                 </div>
 
                 <div className="task-map-legend">
-                  <div className="task-legend-title">图斑图例</div>
+                  {dispatchAreas.length ? (
+                    <>
+                      <div className="task-legend-title">核查片区</div>
+                      <div className="task-legend-item">
+                        <span className="task-legend-area" />
+                        <span>{dispatchAreas.length} 个已分配片区</span>
+                      </div>
+                      <div className="task-legend-divider" />
+                    </>
+                  ) : null}
+                  <div className="task-legend-title">{isPoiTask ? "POI 点位图例" : "图斑图例"}</div>
                   <div className="task-legend-item">
                     <span className="task-legend-dot" style={{ background: "#7d95ef" }} />
                     <span>核查正确</span>
@@ -1215,6 +2010,10 @@ export function TaskDetailPage() {
                   <div className="task-legend-item">
                     <span className="task-legend-dot" style={{ background: "#e0c87d" }} />
                     <span>待核查</span>
+                  </div>
+                  <div className="task-legend-item">
+                    <span className="task-legend-dot" style={{ background: "#2fa36b" }} />
+                    <span>新增核查图斑</span>
                   </div>
                   <div className="task-legend-divider" />
                   <div className="task-legend-title">SHP 来源</div>
@@ -1402,7 +2201,7 @@ export function TaskDetailPage() {
                         <td className="task-spot-table-coord">{spot.coordinate[0].toFixed(4)}, {spot.coordinate[1].toFixed(4)}</td>
                         <td>
                           <span className={`task-spot-result-tag ${spot.inspectionResult}`}>
-                            {spot.inspectionResult === "correct" ? "正确" : spot.inspectionResult === "incorrect" ? "错误" : "待核查"}
+                            {getTaskSpotResultMeta(spot.inspectionResult).label}
                           </span>
                         </td>
                         <td className="task-spot-table-notes">{spot.inspectionNotes}</td>

@@ -207,6 +207,11 @@ select {
 .menu-group {
   display: grid;
   gap: 4px;
+  position: relative;
+}
+
+.menu-group.active {
+  z-index: 1;
 }
 
 .menu-item {

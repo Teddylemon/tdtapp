@@ -2,6 +2,11 @@
   background: transparent;
 }
 
+.task-spot-result-tag.added {
+  background: #e2f6ea;
+  color: #22764d;
+}
+
 .tasks-page .list-shell-top,
 .tasks-page .list-shell-filters,
 .tasks-page .list-shell-footer {
@@ -1254,6 +1259,49 @@
   line-height: 18px;
 }
 
+.task-detail-area-list {
+  display: grid;
+  gap: 8px;
+}
+
+.task-detail-area-row {
+  display: grid;
+  grid-template-columns: 6px minmax(0, 1fr);
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid #e7e5df;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.task-detail-area-row > i {
+  width: 6px;
+  min-height: 34px;
+  border-radius: 99px;
+}
+
+.task-detail-area-row > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.task-detail-area-row strong {
+  color: #2a2723;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.task-detail-area-row em {
+  overflow: hidden;
+  color: #8a8176;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ===== 右侧地图列 ===== */
 .task-detail-map-column {
   position: relative;
@@ -1320,6 +1368,14 @@
   border-radius: 50%;
   flex-shrink: 0;
   border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.task-legend-area {
+  width: 15px;
+  height: 10px;
+  border: 2px solid #316b9e;
+  border-radius: 3px;
+  background: rgba(49, 107, 158, 0.16);
 }
 
 .task-legend-divider {
@@ -1738,5 +1794,768 @@
 
   .task-chart-grid {
     gap: 12px;
+  }
+}
+
+/* ===== 新建空间任务编排台 ===== */
+.task-spatial-create-page {
+  --spatial-ink: #20303a;
+  --spatial-muted: #7e8c91;
+  --spatial-line: #dce4e2;
+  --spatial-blue: #235f8d;
+  --spatial-paper: #f7f8f4;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  padding-top: 12px;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(109, 148, 128, 0.08), transparent 24%),
+    transparent;
+}
+
+.task-spatial-header {
+  flex: 0 0 auto;
+  padding-bottom: 10px;
+}
+
+.task-spatial-heading-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.task-spatial-heading-copy h2 {
+  margin: 0;
+  color: var(--spatial-ink);
+  font-size: 21px;
+  line-height: 28px;
+}
+
+.task-spatial-heading-copy p {
+  margin: 0;
+  color: var(--spatial-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.task-spatial-summary-strip {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0;
+  min-height: 54px;
+  border: 1px solid var(--spatial-line);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 8px 22px rgba(53, 73, 70, 0.045);
+}
+
+.task-spatial-summary-strip div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 142px;
+  padding: 0 18px;
+  border-right: 1px solid #e8edeb;
+}
+
+.task-spatial-summary-strip div:last-child {
+  border-right: 0;
+}
+
+.task-spatial-summary-strip span {
+  color: #87938f;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.task-spatial-summary-strip strong {
+  color: #27414a;
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.task-spatial-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 370px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #d9e1df;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 36px rgba(35, 55, 52, 0.08);
+}
+
+.task-spatial-map-shell {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--spatial-line);
+  background: #dfe7df;
+}
+
+.task-spatial-map {
+  width: 100%;
+  height: 100%;
+  min-height: 620px;
+}
+
+.task-spatial-map--drawing,
+.task-spatial-map--drawing .leaflet-interactive {
+  cursor: crosshair !important;
+}
+
+.task-spatial-map-toolbar {
+  position: absolute;
+  top: 16px;
+  left: 56px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(211, 220, 216, 0.94);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 24px rgba(39, 61, 57, 0.13);
+}
+
+.task-spatial-draw-button,
+.task-spatial-tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #dbe3e0;
+  border-radius: 8px;
+  background: #fff;
+  color: #36545e;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.task-spatial-draw-button {
+  border-color: #2d6b96;
+  background: #2d6b96;
+  color: #fff;
+}
+
+.task-spatial-draw-icon {
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.task-spatial-tool-button.primary {
+  border-color: #2d6b96;
+  background: #2d6b96;
+  color: #fff;
+}
+
+.task-spatial-drawing-hint {
+  padding: 0 6px;
+  color: #61716f;
+  font-size: 12px;
+}
+
+.task-spatial-source-card {
+  position: absolute;
+  bottom: 22px;
+  left: 18px;
+  z-index: 900;
+  display: grid;
+  gap: 4px;
+  width: min(340px, calc(100% - 36px));
+  padding: 13px 15px;
+  border: 1px solid rgba(211, 220, 216, 0.96);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 26px rgba(39, 61, 57, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.task-spatial-source-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #537068;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.task-spatial-source-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #699b78;
+  box-shadow: 0 0 0 3px rgba(105, 155, 120, 0.14);
+}
+
+.task-spatial-source-card strong {
+  overflow: hidden;
+  color: #2d3e43;
+  font-size: 13px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-spatial-source-card span {
+  color: #82908d;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.task-spatial-map-legend {
+  position: absolute;
+  right: 16px;
+  bottom: 22px;
+  z-index: 900;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  max-width: 290px;
+  padding: 10px 12px;
+  border: 1px solid rgba(211, 220, 216, 0.94);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 20px rgba(39, 61, 57, 0.09);
+}
+
+.task-spatial-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #65736f;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.task-spatial-map-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.task-spatial-poi {
+  filter: drop-shadow(0 1px 2px rgba(20, 47, 55, 0.52));
+}
+
+.task-spatial-poi.selected {
+  filter: drop-shadow(0 0 1px #ffffff) drop-shadow(0 0 5px rgba(28, 91, 128, 0.82));
+}
+
+.task-spatial-recipient-float {
+  position: absolute;
+  top: 72px;
+  right: 18px;
+  z-index: 1100;
+  width: 308px;
+  padding: 14px;
+  border: 1px solid rgba(211, 220, 216, 0.98);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 16px 34px rgba(37, 57, 55, 0.18);
+}
+
+.task-spatial-popup-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #f4f6f4;
+  color: #82908d;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.task-spatial-popup-close:hover {
+  background: #e9efec;
+  color: #50635f;
+}
+
+.task-spatial-recipient-popup .leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 16px 34px rgba(37, 57, 55, 0.18);
+}
+
+.task-spatial-recipient-popup .leaflet-popup-content {
+  width: 280px !important;
+  margin: 14px;
+}
+
+.task-spatial-popup-content {
+  display: grid;
+  gap: 10px;
+}
+
+.task-spatial-popup-head {
+  display: grid;
+  gap: 2px;
+  padding-right: 18px;
+}
+
+.task-spatial-popup-head strong {
+  color: #304147;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.task-spatial-popup-head span {
+  color: #87938f;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.task-spatial-popup-search {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #dbe3e0;
+  border-radius: 8px;
+  background: #fbfcfb;
+  color: #304147;
+  font-size: 12px;
+  outline: none;
+}
+
+.task-spatial-popup-search:focus {
+  border-color: #88aeb7;
+  box-shadow: 0 0 0 3px rgba(136, 174, 183, 0.16);
+}
+
+.task-spatial-popup-list {
+  display: grid;
+  gap: 5px;
+  max-height: 210px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.task-spatial-popup-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid #e7ecea;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.task-spatial-popup-option:has(input:checked) {
+  border-color: #9abbc1;
+  background: #f2f8f8;
+}
+
+.task-spatial-popup-option input {
+  accent-color: #2d6b96;
+}
+
+.task-spatial-popup-option span {
+  display: grid;
+  gap: 1px;
+}
+
+.task-spatial-popup-option strong {
+  color: #405258;
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.task-spatial-popup-option em {
+  color: #8a9794;
+  font-size: 10px;
+  font-style: normal;
+  line-height: 15px;
+}
+
+.task-spatial-popup-empty {
+  padding: 12px 8px;
+  color: #94a09c;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.task-spatial-popup-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #edf1ef;
+}
+
+.task-spatial-popup-footer span {
+  color: #7d8d89;
+  font-size: 11px;
+}
+
+.task-spatial-popup-footer button {
+  height: 30px;
+  padding: 0 13px;
+  border: 1px solid #2d6b96;
+  border-radius: 7px;
+  background: #2d6b96;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.task-spatial-side {
+  min-width: 0;
+  min-height: 0;
+  background: #fbfcfa;
+}
+
+.task-spatial-side-scroll {
+  display: grid;
+  gap: 12px;
+  height: 100%;
+  padding: 14px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.task-spatial-side-section {
+  display: grid;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid #e1e7e4;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.task-spatial-section-head {
+  display: grid;
+  gap: 2px;
+}
+
+.task-spatial-section-head strong {
+  color: #2c4248;
+  font-size: 14px;
+  line-height: 21px;
+}
+
+.task-spatial-section-head span {
+  color: #899591;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.task-spatial-section-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.task-spatial-section-head-row > div {
+  display: grid;
+  gap: 2px;
+}
+
+.task-spatial-section-head-row > b {
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 22px;
+  border-radius: 999px;
+  background: #e9f1ef;
+  color: #52746e;
+  font-size: 12px;
+}
+
+.task-spatial-side .form-block {
+  gap: 5px;
+}
+
+.task-spatial-side .form-block label {
+  color: #71807d;
+  font-size: 12px;
+}
+
+.task-spatial-side .input,
+.task-spatial-side .textarea {
+  border-color: #dbe3e0;
+  border-radius: 9px;
+  background: #fdfefd;
+  color: #304147;
+  font-size: 12px;
+}
+
+.task-spatial-side .textarea {
+  resize: vertical;
+}
+
+.task-spatial-upload {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px dashed #bfcfc9;
+  border-radius: 9px;
+  background: #f7faf8;
+  cursor: pointer;
+}
+
+.task-spatial-upload input {
+  display: none;
+}
+
+.task-spatial-upload span {
+  color: #426c78;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.task-spatial-upload em {
+  overflow: hidden;
+  color: #899591;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-spatial-area-list {
+  display: grid;
+  gap: 8px;
+}
+
+.task-spatial-area-card {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #e3e9e6;
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-spatial-area-card:hover,
+.task-spatial-area-card.active {
+  border-color: #91b4bc;
+  background: #f7fbfb;
+  box-shadow: 0 4px 12px rgba(80, 120, 124, 0.08);
+}
+
+.task-spatial-area-card > i {
+  width: 7px;
+  height: 34px;
+  border-radius: 99px;
+}
+
+.task-spatial-area-card > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.task-spatial-area-card strong {
+  color: #304147;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.task-spatial-area-card em {
+  overflow: hidden;
+  color: #87938f;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-spatial-area-card > b {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 17px;
+  white-space: nowrap;
+}
+
+.task-spatial-area-card > b.assigned {
+  background: #e5f3e9;
+  color: #4e7d5b;
+}
+
+.task-spatial-area-card > b.pending {
+  background: #fff1db;
+  color: #a77636;
+}
+
+.task-spatial-empty {
+  display: grid;
+  gap: 5px;
+  padding: 16px 13px;
+  border: 1px dashed #cbd8d3;
+  border-radius: 10px;
+  background: #f9fbf9;
+}
+
+.task-spatial-empty strong {
+  color: #5e716e;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.task-spatial-empty span {
+  color: #95a09c;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.task-spatial-editor {
+  border-color: #cfdedb;
+  box-shadow: 0 8px 18px rgba(73, 108, 103, 0.06);
+}
+
+.task-spatial-delete {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #b66c5f;
+  font-size: 11px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.task-spatial-area-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.task-spatial-area-metrics div {
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: #f3f7f5;
+}
+
+.task-spatial-area-metrics strong {
+  color: #315c68;
+  font-size: 17px;
+  line-height: 21px;
+}
+
+.task-spatial-area-metrics span {
+  color: #84918e;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.task-spatial-recipient-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-spatial-recipient-head > div {
+  display: grid;
+  gap: 1px;
+}
+
+.task-spatial-recipient-head strong {
+  color: #40555a;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.task-spatial-recipient-head span {
+  color: #8d9995;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.task-spatial-recipient-list {
+  display: grid;
+  gap: 7px;
+}
+
+.task-spatial-recipient-list div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f6f8f6;
+}
+
+.task-spatial-recipient-list strong {
+  color: #405258;
+  font-size: 12px;
+}
+
+.task-spatial-recipient-list span {
+  overflow: hidden;
+  color: #8a9794;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-spatial-recipient-list > em {
+  color: #a18f7b;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 18px;
+}
+
+@media (max-width: 1280px) {
+  .task-spatial-workbench {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+
+  .task-spatial-summary-strip div {
+    min-width: 124px;
+    padding-inline: 14px;
+  }
+}
+
+@media (max-width: 980px) {
+  .task-spatial-workbench {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .task-spatial-map-shell {
+    min-height: 560px;
+    border-right: 0;
+    border-bottom: 1px solid var(--spatial-line);
+  }
+
+  .task-spatial-side {
+    min-height: 480px;
+  }
+
+  .task-spatial-summary-strip {
+    overflow-x: auto;
   }
 }
