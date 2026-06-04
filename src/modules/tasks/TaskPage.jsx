@@ -510,7 +510,7 @@ function buildSamplePlots({ selectedAreaKeys, plotCount, inspectors, status }) {
   }));
 }
 
-function createTaskFromDraft(draft, users, submitMode = "draft") {
+function createTaskFromDraft(draft, users, submitMode = "draft", existingTask = null) {
   const selectedManagers = users.filter((user) => draft.managerIds.includes(user.id));
   const selectedInspectors = users.filter((user) => draft.inspectorIds.includes(user.id));
   const plotCount = draft.sourceFiles.reduce((sum, file) => sum + file.plotCount, 0);
@@ -525,11 +525,12 @@ function createTaskFromDraft(draft, users, submitMode = "draft") {
     completed: 0,
     status: isDispatchMode ? "待核查" : "待接收",
   }));
-  const nextId = `TASK-${String(Date.now()).slice(-6)}`;
+  const nextId = existingTask?.id ?? `TASK-${String(Date.now()).slice(-6)}`;
   const targetAreaSummary = summarizeAreaKeys(draft.selectedAreaKeys);
   const managerNames = selectedManagers.map((user) => user.nickname);
   const nextStatus = isDispatchMode ? TASK_STATUS.DISPATCHED : TASK_STATUS.DRAFT;
   const dispatchedAt = isDispatchMode ? formatTimestamp(new Date()) : "-";
+  const createdAt = existingTask?.createdAt ?? formatTimestamp(new Date());
 
   return {
     id: nextId,
@@ -551,7 +552,7 @@ function createTaskFromDraft(draft, users, submitMode = "draft") {
     assigneeCount: selectedInspectors.length,
     deadline: draft.deadline.replace("T", " "),
     status: nextStatus,
-    createdAt: formatTimestamp(new Date()),
+    createdAt,
     dispatchedAt,
     submittedAt: "-",
     platformUpdatedAt: "-",
@@ -575,6 +576,50 @@ function createTaskFromDraft(draft, users, submitMode = "draft") {
       status: isDispatchMode ? "待核查" : TASK_STATUS.DRAFT,
     }),
   };
+}
+
+function buildDefaultTaskDraft() {
+  return {
+    title: "",
+    selectedAreaKeys: [],
+    deadline: "2026-06-05T18:00",
+    sourceFiles: createMockSourceFiles(),
+    managerIds: [],
+    inspectorIds: [],
+    requirement: "",
+    description: "",
+    plotAllocations: {},
+  };
+}
+
+function buildTaskDraftFromTask(task) {
+  return {
+    title: task.title ?? "",
+    selectedAreaKeys: task.targetAreas?.length ? task.targetAreas : [],
+    deadline: (task.deadline ?? "2026-06-05 18:00").replace(" ", "T"),
+    sourceFiles: task.sourceFiles?.length ? task.sourceFiles : createMockSourceFiles(),
+    managerIds: task.managerIds ?? [],
+    inspectorIds: task.inspectors?.map((item) => item.id) ?? [],
+    requirement: task.requirement ?? "",
+    description: task.description ?? "",
+    plotAllocations: Object.fromEntries((task.inspectors ?? []).map((item) => [item.id, item.plots])),
+  };
+}
+
+function buildPlotAllocations(inspectorIds, totalPlotEstimate, existingAllocations = {}) {
+  if (!inspectorIds.length || totalPlotEstimate <= 0) return {};
+
+  const hasFullCoverage = inspectorIds.every((id) => Number(existingAllocations[id]) > 0);
+  const existingTotal = inspectorIds.reduce((sum, id) => sum + Number(existingAllocations[id] || 0), 0);
+  if (hasFullCoverage && existingTotal === totalPlotEstimate) {
+    return Object.fromEntries(inspectorIds.map((id) => [id, Number(existingAllocations[id])]));
+  }
+
+  const base = Math.floor(totalPlotEstimate / inspectorIds.length);
+  const remainder = totalPlotEstimate % inspectorIds.length;
+  return Object.fromEntries(
+    inspectorIds.map((id, index) => [id, base + (index < remainder ? 1 : 0)]),
+  );
 }
 
 function createSeedTask(config, users) {
@@ -755,15 +800,13 @@ function buildInitialTasks(users) {
     createSeedTask(
       {
         id: "TASK-004",
-        title: "鄂州市 6 月新增建设图斑核查",
+        title: "鄂州市 6 月 POI 点位核查草稿",
         description:
-          "6 月新增建设图斑核查任务草稿，已提前设置下发区域、图斑来源文件和预选执行人。",
-        targetAreas: [
-          buildAreaKey("鄂州市", ALL_COUNTIES),
-          buildAreaKey("鄂州市", "鄂城区"),
-        ],
+          "6 月 POI 点位核查任务草稿，已提前设置点位来源、空间片区和预选执行人员，可在下发前继续调整。",
+        spatialMode: "poi",
+        targetAreas: [buildAreaKey("武汉市", ALL_COUNTIES)],
         sourceFiles: [
-          { id: "seed-5", name: "ezhou_new_building_202606.zip", size: 2.6 * 1024 * 1024, sizeLabel: "2.6 MB", plotCount: 32 },
+          { id: "seed-5", name: "ezhou_poi_verify_202606.shp", size: 2.6 * 1024 * 1024, sizeLabel: "2.6 MB", plotCount: 32 },
         ],
         managerIds: ["2000016"],
         inspectors: [
@@ -779,8 +822,38 @@ function buildInitialTasks(users) {
         submittedAt: "-",
         platformUpdatedAt: "-",
         requirement:
-          "草稿确认后正式下发，个人用户需回传照片、定位和核查说明。",
-        progressNote: "当前为省级草稿任务，等待确认后正式下发到市级。",
+          "草稿确认后正式下发，请结合片区边界逐点核查 POI 的位置、名称和分类信息，并补充现场照片。",
+        progressNote: "当前为空间核查草稿，可继续修改点位文件、片区和执行人员。",
+        dispatchAreas: [
+          {
+            id: "AREA-01",
+            name: "核查片区 01",
+            color: getSpatialAreaColor(0),
+            coordinates: [
+              [30.548, 114.266],
+              [30.575, 114.292],
+              [30.57, 114.334],
+              [30.532, 114.322],
+              [30.525, 114.282],
+            ],
+            plotIds: mockSpatialPlots.slice(0, 16).map((plot) => plot.id),
+            recipientIds: ["2000017"],
+          },
+          {
+            id: "AREA-02",
+            name: "核查片区 02",
+            color: getSpatialAreaColor(1),
+            coordinates: [
+              [30.59, 114.306],
+              [30.622, 114.34],
+              [30.604, 114.39],
+              [30.565, 114.378],
+              [30.56, 114.326],
+            ],
+            plotIds: mockSpatialPlots.slice(16, 30).map((plot) => plot.id),
+            recipientIds: ["2000018"],
+          },
+        ],
       },
       users,
     ),
@@ -792,6 +865,17 @@ function isTemporaryTask111(task) {
     .filter(Boolean)
     .map((value) => String(value).trim())
     .some((value) => value === "111");
+}
+
+function isLegacyMockDraftTask(task) {
+  return task?.title === "鄂州市 6 月新增建设图斑核查"
+    || (task?.id === "TASK-004" && task?.status === TASK_STATUS.DRAFT);
+}
+
+function getVisibleSeedTasks(users) {
+  return buildInitialTasks(users)
+    .filter((item) => !isLegacyMockDraftTask(item))
+    .map(normalizeTaskRecord);
 }
 
 function hydrateStoredTaskAreas(task, seedMap) {
@@ -813,7 +897,7 @@ function hydrateStoredTaskAreas(task, seedMap) {
 }
 
 function readStoredTasks(users) {
-  if (typeof window === "undefined") return buildInitialTasks(users).map(normalizeTaskRecord);
+  if (typeof window === "undefined") return getVisibleSeedTasks(users);
 
   // Clear old storage keys
   try {
@@ -834,30 +918,43 @@ function readStoredTasks(users) {
       const seedMap = new Map(seedTasks.map((task) => [task.id, task]));
       return stored
         .filter((item) => !isTemporaryTask111(item))
+        .filter((item) => !isLegacyMockDraftTask(item))
         .map((item) => hydrateStoredTaskAreas(item, seedMap))
         .map(normalizeTaskRecord);
     }
   } catch {
-    return buildInitialTasks(users).map(normalizeTaskRecord);
+    return getVisibleSeedTasks(users);
   }
 
-  return buildInitialTasks(users).map(normalizeTaskRecord);
+  return getVisibleSeedTasks(users);
+}
+
+function writeStoredTasks(records) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(storageKey, JSON.stringify(records));
 }
 
 function useTaskRecords(roleUsers) {
   const [records, setRecords] = useState(() => readStoredTasks(roleUsers));
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(storageKey, JSON.stringify(records));
+    writeStoredTasks(records);
   }, [records]);
 
   const updateTask = (taskId, patch) => {
-    setRecords((current) => current.map((task) => (task.id === taskId ? { ...task, ...patch } : task)));
+    setRecords((current) => {
+      const next = current.map((task) => (task.id === taskId ? { ...task, ...patch } : task));
+      writeStoredTasks(next);
+      return next;
+    });
   };
 
   const createTask = (task) => {
-    setRecords((current) => [task, ...current]);
+    setRecords((current) => {
+      const next = [task, ...current];
+      writeStoredTasks(next);
+      return next;
+    });
   };
 
   return { records, updateTask, createTask };
@@ -1007,6 +1104,7 @@ export function TaskListPage() {
 
             {pageRecords.map((task) => {
               const primaryAction = buildTaskPrimaryAction(task, updateTask);
+              const canEditDraft = task.status === TASK_STATUS.DRAFT;
               const progressSummary = getTaskProgressSummary(task);
 
               return (
@@ -1048,6 +1146,16 @@ export function TaskListPage() {
                       <ButtonIcon type="view" />
                       <span>查看</span>
                     </button>
+                    {canEditDraft ? (
+                      <button
+                        type="button"
+                        className="inline-button action-view"
+                        onClick={() => navigate(`/tasks/${task.id}/edit`)}
+                      >
+                        <ButtonIcon type="edit" />
+                        <span>编辑</span>
+                      </button>
+                    ) : null}
                     {primaryAction ? (
                       <button
                         type="button"
@@ -1112,7 +1220,7 @@ function summarizeSpatialRecipients(recipientIds, users) {
   return `${recipients.slice(0, 2).map((user) => user.nickname).join("、")} 等 ${recipients.length} 人`;
 }
 
-function createSpatialTaskFromDraft(draft, users, submitMode) {
+function createSpatialTaskFromDraft(draft, users, submitMode, existingTask = null) {
   const isDispatchMode = submitMode === "dispatch";
   const recipientIds = Array.from(new Set(draft.dispatchAreas.flatMap((area) => area.recipientIds)));
   const recipients = users.filter((user) => recipientIds.includes(user.id));
@@ -1122,6 +1230,7 @@ function createSpatialTaskFromDraft(draft, users, submitMode) {
   const targetAreas = [buildAreaKey("武汉市", ALL_COUNTIES)];
   const targetAreaSummary = `${draft.dispatchAreas.length} 个空间片区 · 覆盖 ${plotCount} 个 POI 点位`;
   const nextStatus = isDispatchMode ? TASK_STATUS.DISPATCHED : TASK_STATUS.DRAFT;
+  const now = formatTimestamp(new Date());
   const inspectorAssignments = recipients.map((user) => {
     const userAreaPlotIds = Array.from(new Set(
       draft.dispatchAreas
@@ -1141,7 +1250,7 @@ function createSpatialTaskFromDraft(draft, users, submitMode) {
   });
 
   return {
-    id: `TASK-${String(Date.now()).slice(-6)}`,
+    id: existingTask?.id ?? `TASK-${String(Date.now()).slice(-6)}`,
     title: draft.title.trim(),
     description:
       draft.requirement.trim() ||
@@ -1161,8 +1270,8 @@ function createSpatialTaskFromDraft(draft, users, submitMode) {
     assigneeCount: recipients.length,
     deadline: draft.deadline.replace("T", " "),
     status: nextStatus,
-    createdAt: formatTimestamp(new Date()),
-    dispatchedAt: isDispatchMode ? formatTimestamp(new Date()) : "-",
+    createdAt: existingTask?.createdAt ?? now,
+    dispatchedAt: isDispatchMode ? now : "-",
     submittedAt: "-",
     platformUpdatedAt: "-",
     requirement:
@@ -1188,25 +1297,56 @@ function createSpatialTaskFromDraft(draft, users, submitMode) {
   };
 }
 
-export function TaskCreatePage() {
-  const navigate = useNavigate();
-  const users = useMemo(() => readUserRecords(), []);
-  const { createTask } = useTaskRecords(users);
-  const sideScrollRef = useRef(null);
-  const areaSectionRef = useRef(null);
-  const [draft, setDraft] = useState(() => ({
+function buildDefaultSpatialDraft() {
+  return {
     title: "武汉市 6 月 POI 点位核查",
     deadline: "2026-06-20T18:00",
     requirement: "请逐一核验片区内 POI 点位的位置、名称和分类信息，发现问题时补充现场说明，并上传定位照片。",
     sourceFiles: createMockSpatialSourceFiles(),
     dispatchAreas: [],
-  }));
+  };
+}
+
+function buildSpatialDraftFromTask(task) {
+  return {
+    title: task.title ?? "",
+    deadline: (task.deadline ?? "").replace(" ", "T"),
+    requirement: task.requirement ?? task.description ?? "",
+    sourceFiles: Array.isArray(task.sourceFiles) ? task.sourceFiles : [],
+    dispatchAreas: Array.isArray(task.dispatchAreas)
+      ? task.dispatchAreas.map((area) => ({
+          ...area,
+          coordinates: Array.isArray(area.coordinates)
+            ? area.coordinates.map((coordinate) => [...coordinate])
+            : [],
+          plotIds: Array.isArray(area.plotIds) ? [...area.plotIds] : [],
+          recipientIds: Array.isArray(area.recipientIds) ? [...area.recipientIds] : [],
+        }))
+      : [],
+  };
+}
+
+function SpatialTaskEditor({ pageTitle, initialDraft, onBack, onSubmitDraft, submitToast }) {
+  const users = useMemo(() => readUserRecords(), []);
+  const sideScrollRef = useRef(null);
+  const areaSectionRef = useRef(null);
+  const [draft, setDraft] = useState(initialDraft);
   const [drawingActive, setDrawingActive] = useState(false);
   const [drawingVertices, setDrawingVertices] = useState([]);
   const [drawingCursor, setDrawingCursor] = useState(null);
   const [selectedAreaId, setSelectedAreaId] = useState("");
   const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
   const [recipientKeyword, setRecipientKeyword] = useState("");
+
+  useEffect(() => {
+    setDraft(initialDraft);
+    setDrawingActive(false);
+    setDrawingVertices([]);
+    setDrawingCursor(null);
+    setSelectedAreaId("");
+    setRecipientPickerOpen(false);
+    setRecipientKeyword("");
+  }, [initialDraft]);
 
   const selectedArea = draft.dispatchAreas.find((area) => area.id === selectedAreaId) ?? null;
   const availableRecipients = useMemo(
@@ -1225,6 +1365,18 @@ export function TaskCreatePage() {
       behavior: "smooth",
     });
   }, [draft.dispatchAreas.length]);
+
+  useEffect(() => {
+    if (!draft.dispatchAreas.length) {
+      if (selectedAreaId) setSelectedAreaId("");
+      if (recipientPickerOpen) setRecipientPickerOpen(false);
+      return;
+    }
+
+    if (!draft.dispatchAreas.some((area) => area.id === selectedAreaId)) {
+      setSelectedAreaId(draft.dispatchAreas[0].id);
+    }
+  }, [draft.dispatchAreas, recipientPickerOpen, selectedAreaId]);
 
   const updateDraft = (patch) => setDraft((current) => ({ ...current, ...patch }));
 
@@ -1307,9 +1459,12 @@ export function TaskCreatePage() {
     setDraft((current) => ({
       ...current,
       sourceFiles: files.map((file) => createSourceFileRecord(file, 1)),
+      dispatchAreas: [],
     }));
+    setSelectedAreaId("");
+    setRecipientPickerOpen(false);
     event.target.value = "";
-    showToast("SHP 文件已载入，当前原型继续使用模拟 POI 点位进行空间编排");
+    showToast("SHP 点位文件已更新，请重新绘制片区并指定执行人员");
   };
 
   const openRecipientPicker = () => {
@@ -1343,20 +1498,19 @@ export function TaskCreatePage() {
       return;
     }
 
-    createTask(createSpatialTaskFromDraft(draft, users, submitMode));
-    showToast(submitMode === "dispatch" ? "空间任务已下发" : "空间任务草稿已保存");
-    navigate("/tasks");
+    onSubmitDraft(draft, submitMode);
+    showToast(submitMode === "dispatch" ? submitToast.dispatch : submitToast.draft);
   };
 
   return (
     <div className="page-content task-spatial-create-page">
       <section className="topic-detail-header task-spatial-header">
         <div className="topic-detail-heading">
-          <button type="button" className="icon-back-button" onClick={() => navigate("/tasks")} aria-label="返回">
+          <button type="button" className="icon-back-button" onClick={onBack} aria-label="返回">
             <ButtonIcon type="back" />
           </button>
           <div className="task-spatial-heading-copy">
-            <h2>新建核查任务</h2>
+            <h2>{pageTitle}</h2>
           </div>
         </div>
         <div className="topic-detail-toolbar">
@@ -1611,6 +1765,100 @@ export function TaskCreatePage() {
   );
 }
 
+export function TaskCreatePage() {
+  const navigate = useNavigate();
+  const users = useMemo(() => readUserRecords(), []);
+  const { createTask } = useTaskRecords(users);
+  const initialDraft = useMemo(() => buildDefaultSpatialDraft(), []);
+
+  return (
+    <SpatialTaskEditor
+      pageTitle="新建核查任务"
+      initialDraft={initialDraft}
+      onBack={() => navigate("/tasks")}
+      onSubmitDraft={(draft, submitMode) => {
+        createTask(createSpatialTaskFromDraft(draft, users, submitMode));
+        navigate("/tasks");
+      }}
+      submitToast={{ draft: "空间任务草稿已保存", dispatch: "空间任务已下发" }}
+    />
+  );
+}
+
+export function TaskEditPage() {
+  const navigate = useNavigate();
+  const { taskId } = useParams();
+  const users = useMemo(() => readUserRecords(), []);
+  const { records, updateTask } = useTaskRecords(users);
+  const task = records.find((item) => item.id === taskId);
+  const initialDraft = useMemo(
+    () => (task ? buildSpatialDraftFromTask(task) : buildDefaultSpatialDraft()),
+    [task],
+  );
+
+  if (!task) {
+    return (
+      <div className="page-content topic-detail-page task-detail-page">
+        <section className="topic-detail-header task-detail-header">
+          <div className="topic-detail-heading task-detail-heading">
+            <button type="button" className="icon-back-button" onClick={() => navigate("/tasks")} aria-label="返回">
+              <ButtonIcon type="back" />
+            </button>
+          </div>
+        </section>
+        <div className="empty-state">任务不存在或已被删除</div>
+      </div>
+    );
+  }
+
+  if (task.status !== TASK_STATUS.DRAFT) {
+    return (
+      <div className="page-content topic-detail-page task-detail-page">
+        <section className="topic-detail-header task-detail-header">
+          <div className="topic-detail-heading task-detail-heading">
+            <button type="button" className="icon-back-button" onClick={() => navigate(`/tasks/${task.id}`)} aria-label="返回">
+              <ButtonIcon type="back" />
+            </button>
+            <div className="topic-detail-title task-detail-title">
+              <h2>{task.title}</h2>
+            </div>
+          </div>
+        </section>
+        <div className="empty-state">当前仅支持编辑草稿状态下的 POI 点位任务</div>
+      </div>
+    );
+  }
+
+  if (task.spatialMode !== "poi") {
+    return (
+      <TaskCreateModal
+        users={users}
+        onClose={() => navigate(`/tasks/${task.id}`)}
+        onSubmit={(draft, submitMode) => {
+          updateTask(task.id, createTaskFromDraft(draft, users, submitMode, task));
+          navigate(`/tasks/${task.id}`);
+          showToast(submitMode === "dispatch" ? "浠诲姟宸蹭笅鍙?" : "浠诲姟鑽夌宸叉洿鏂?", "success");
+        }}
+        title="缂栬緫鑽夌浠诲姟"
+        initialDraft={buildTaskDraftFromTask(task)}
+      />
+    );
+  }
+
+  return (
+    <SpatialTaskEditor
+      pageTitle="编辑草稿任务"
+      initialDraft={initialDraft}
+      onBack={() => navigate(`/tasks/${task.id}`)}
+      onSubmitDraft={(draft, submitMode) => {
+        updateTask(task.id, createSpatialTaskFromDraft(draft, users, submitMode, task));
+        navigate(`/tasks/${task.id}`);
+      }}
+      submitToast={{ draft: "任务草稿已更新", dispatch: "任务已下发" }}
+    />
+  );
+}
+
 function MapResizeHelper() {
   const map = useMap();
   useEffect(() => {
@@ -1812,6 +2060,7 @@ export function TaskDetailPage() {
   }
 
   const toolbarAction = buildTaskPrimaryAction(task, updateTask);
+  const canEditDraft = task.status === TASK_STATUS.DRAFT;
 
   const [activeTab, setActiveTab] = useState("detail");
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
@@ -1847,6 +2096,15 @@ export function TaskDetailPage() {
           </div>
         </div>
         <div className="topic-detail-toolbar task-detail-toolbar">
+          {canEditDraft ? (
+            <button
+              type="button"
+              className="ghost-button slim-button"
+              onClick={() => navigate(`/tasks/${task.id}/edit`)}
+            >
+              编辑草稿
+            </button>
+          ) : null}
           {toolbarAction ? (
             <button type="button" className="primary-button slim-button" onClick={toolbarAction.onClick}>
               {toolbarAction.label}
@@ -2242,36 +2500,42 @@ export function TaskDetailPage() {
   );
 }
 
-function TaskCreateModal({ users, onClose, onSubmit }) {
+function TaskCreateModal({
+  users,
+  onClose,
+  onSubmit,
+  title = "鏂板缓浠诲姟涓嬪彂",
+  initialDraft = null,
+}) {
   const areaCityOptions = useMemo(() => getCityOptions(users), [users]);
 
-  const [draft, setDraft] = useState(() => ({
-    title: "",
-    selectedAreaKeys: [],
-    deadline: "2026-06-05T18:00",
-    sourceFiles: createMockSourceFiles(),
-    managerIds: [],
-    inspectorIds: [],
-    requirement: "",
-    description: "",
-  }));
+  const [draft, setDraft] = useState(() => initialDraft ?? buildDefaultTaskDraft());
   const [pickerMode, setPickerMode] = useState(null);
-  const [plotAllocations, setPlotAllocations] = useState({});
+  const [plotAllocations, setPlotAllocations] = useState(() => {
+    const nextDraft = initialDraft ?? buildDefaultTaskDraft();
+    return buildPlotAllocations(
+      nextDraft.inspectorIds,
+      nextDraft.sourceFiles.reduce((sum, file) => sum + file.plotCount, 0),
+      nextDraft.plotAllocations,
+    );
+  });
 
   const totalPlotEstimate = draft.sourceFiles.reduce((sum, file) => sum + file.plotCount, 0);
 
   useEffect(() => {
-    if (!draft.inspectorIds.length || totalPlotEstimate <= 0) {
-      setPlotAllocations({});
-      return;
-    }
-    const base = Math.floor(totalPlotEstimate / draft.inspectorIds.length);
-    const remainder = totalPlotEstimate % draft.inspectorIds.length;
-    const allocations = {};
-    draft.inspectorIds.forEach((id, index) => {
-      allocations[id] = base + (index < remainder ? 1 : 0);
-    });
-    setPlotAllocations(allocations);
+    const nextDraft = initialDraft ?? buildDefaultTaskDraft();
+    setDraft(nextDraft);
+    setPlotAllocations(
+      buildPlotAllocations(
+        nextDraft.inspectorIds,
+        nextDraft.sourceFiles.reduce((sum, file) => sum + file.plotCount, 0),
+        nextDraft.plotAllocations,
+      ),
+    );
+  }, [initialDraft]);
+
+  useEffect(() => {
+    setPlotAllocations((current) => buildPlotAllocations(draft.inspectorIds, totalPlotEstimate, current));
   }, [draft.inspectorIds, totalPlotEstimate]);
 
   const handlePlotAdjust = (userId, delta) => {
@@ -2402,7 +2666,7 @@ function TaskCreateModal({ users, onClose, onSubmit }) {
     <div className="export-modal-overlay">
       <div className="export-modal-card task-modal-card">
         <div className="export-modal-header">
-          <h3>新建任务下发</h3>
+          <h3>{title}</h3>
           <button type="button" className="export-modal-close" onClick={onClose}>
             ×
           </button>

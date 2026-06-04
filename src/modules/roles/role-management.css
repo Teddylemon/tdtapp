@@ -39,6 +39,10 @@
   background: #fffdfa;
 }
 
+.role-table-shell .table-row > span {
+  min-width: 0;
+}
+
 .role-table-shell .table-head {
   position: sticky;
   top: 0;
@@ -99,14 +103,18 @@
 .role-actions-cell {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
   gap: 10px;
+  min-width: 0;
 }
 
 .role-actions-cell .inline-button {
   min-height: 30px;
+  flex: 0 0 auto;
 }
 
-.role-actions-cell .inline-button span:last-child {
+.role-action-label {
   white-space: nowrap;
 }
 
@@ -245,6 +253,28 @@
 
   .role-actions-cell {
     gap: 8px;
+  }
+}
+
+@media (max-width: 1520px) {
+  .role-cols {
+    grid-template-columns: 84px 96px 108px 180px 156px 144px minmax(132px, 1fr);
+  }
+
+  .role-actions-cell {
+    gap: 6px;
+  }
+
+  .role-actions-cell .inline-button {
+    width: 30px;
+    min-width: 30px;
+    padding: 0;
+    gap: 0;
+    border-radius: 8px;
+  }
+
+  .role-action-label {
+    display: none;
   }
 }
 

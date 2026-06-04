@@ -17,8 +17,6 @@ import {
 } from "../_shared/userDirectory";
 import "./role-management.css";
 
-const roleStorageKey = "tdt-role-user-state";
-
 const defaultForm = {
   id: "",
   nickname: "",
@@ -43,6 +41,14 @@ function nextUserId(users) {
 
 function normalizeFormByRole(form) {
   const next = { ...form };
+
+  if (next.role.startsWith("公众")) {
+    next.city = "-";
+    next.county = "-";
+    next.organization = next.organization || "公众注册用户";
+    next.title = next.title || "公众用户";
+    return next;
+  }
 
   if (next.role.startsWith("省级")) {
     next.city = "省级";
@@ -269,18 +275,6 @@ export default function RoleManagementPage() {
     setDeleteUserId(null);
   };
 
-  const resetMockUsers = () => {
-    setUsers(MOCK_USERS);
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(roleStorageKey);
-    }
-    setKeyword("");
-    setRoleFilter([]);
-    setLevelFilter([]);
-    setPage(1);
-    showToast("已重置为省-市-县三级 mock 用户数据");
-  };
-
   const countyOptions = getCountyOptions(form.city);
   const currentLevel = getRoleLevel(form.role);
 
@@ -323,10 +317,6 @@ export default function RoleManagementPage() {
             />
           </div>
           <div className="filter-actions">
-            <button type="button" className="ghost-button slim-button" onClick={resetMockUsers}>
-              <ActionIcon type="reset" />
-              <span>重置三级 Mock</span>
-            </button>
             <button type="button" className="primary-button slim-button" onClick={openCreateModal}>
               <ActionIcon type="plus" />
               <span>新增用户</span>
@@ -361,21 +351,35 @@ export default function RoleManagementPage() {
                     <em>{user.title}</em>
                   </span>
                   <span className="role-actions-cell">
-                    <button type="button" className="inline-button action-view" onClick={() => openEditModal(user)}>
+                    <button
+                      type="button"
+                      className="inline-button action-view"
+                      onClick={() => openEditModal(user)}
+                      aria-label="编辑用户"
+                      title="编辑用户"
+                    >
                       <ActionIcon type="edit" />
-                      <span>编辑</span>
+                      <span className="role-action-label">编辑</span>
                     </button>
-                    <button type="button" className="inline-button action-view" onClick={() => resetPassword(user)}>
+                    <button
+                      type="button"
+                      className="inline-button action-view"
+                      onClick={() => resetPassword(user)}
+                      aria-label="重置密码"
+                      title="重置密码"
+                    >
                       <ActionIcon type="reset" />
-                      <span>重置密码</span>
+                      <span className="role-action-label">重置密码</span>
                     </button>
                     <button
                       type="button"
                       className="inline-button action-view role-inline-danger"
                       onClick={() => setDeleteUserId(user.id)}
+                      aria-label="删除用户"
+                      title="删除用户"
                     >
                       <ActionIcon type="delete" />
-                      <span>删除</span>
+                      <span className="role-action-label">删除</span>
                     </button>
                   </span>
                 </div>
@@ -406,7 +410,7 @@ export default function RoleManagementPage() {
       {editingUserId !== null ? (
         <UserModal
           title={editingUserId === "new" ? "新增用户" : "编辑用户"}
-          description="统一维护省、市、县三级角色用户，任务下发模块会直接拉取这里的数据。"
+          description="统一维护省、市、县和公众角色用户，任务下发模块会直接拉取这里的数据。"
           onClose={() => setEditingUserId(null)}
           actions={
             <>
@@ -481,11 +485,13 @@ export default function RoleManagementPage() {
                 <select
                   className="select"
                   value={form.city}
-                  disabled={currentLevel === "省级"}
+                  disabled={currentLevel === "省级" || currentLevel === "公众"}
                   onChange={(event) => updateForm({ city: event.target.value })}
                 >
                   {currentLevel === "省级" ? (
                     <option value="省级">省级</option>
+                  ) : currentLevel === "公众" ? (
+                    <option value="-">-</option>
                   ) : (
                     cityOptions.map((option) => (
                       <option key={option} value={option}>
@@ -500,11 +506,12 @@ export default function RoleManagementPage() {
                 <select
                   className="select"
                   value={form.county}
-                  disabled={currentLevel === "省级" || currentLevel === "市级"}
+                  disabled={currentLevel === "省级" || currentLevel === "市级" || currentLevel === "公众"}
                   onChange={(event) => updateForm({ county: event.target.value })}
                 >
                   {currentLevel === "省级" ? <option value="-">-</option> : null}
                   {currentLevel === "市级" ? <option value="全市统筹">全市统筹</option> : null}
+                  {currentLevel === "公众" ? <option value="-">-</option> : null}
                   {currentLevel === "县级"
                     ? countyOptions.map((option) => (
                         <option key={option} value={option}>
@@ -542,7 +549,7 @@ export default function RoleManagementPage() {
       {deleteUser ? (
         <UserModal
           title="删除用户"
-          description={`确认删除用户“${deleteUser.nickname}”吗？此操作仅影响当前演示数据。`}
+          description={`是否确认删除用户“${deleteUser.nickname}”？`}
           onClose={() => setDeleteUserId(null)}
           actions={
             <>
@@ -554,11 +561,7 @@ export default function RoleManagementPage() {
               </button>
             </>
           }
-        >
-          <div className="role-form-surface role-delete-note">
-            <p>删除后，该用户将不会出现在任务下发模块的可选用户列表里。</p>
-          </div>
-        </UserModal>
+        />
       ) : null}
     </div>
   );

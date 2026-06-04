@@ -378,7 +378,7 @@ export function MarkersListPage() {
                 <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll} />
               </span>
               <span>编号</span>
-              <span>标注类型</span>
+              <span>标绘类型</span>
               <span>具体信息</span>
               <span>提交人</span>
               <span>提交时间</span>
@@ -433,43 +433,17 @@ export function MarkersDetailPage() {
   const navigate = useNavigate();
   const [records, setRecords] = useMarkerRecords();
   const record = records.find((item) => item.id === reviewId) ?? records[0];
-  const [remark, setRemark] = useState("");
-  const [error, setError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const scrollAreaRef = useRef(null);
-  const remarkInputRef = useRef(null);
 
   useEffect(() => {
-    setRemark(record?.reviewComment ?? "");
-    setError("");
     setPreviewOpen(false);
   }, [record]);
 
   if (!record) return null;
 
-  const scrollToRemark = () => {
-    const scrollArea = scrollAreaRef.current;
-    const textarea = remarkInputRef.current;
-
-    window.requestAnimationFrame(() => {
-      if (scrollArea) {
-        scrollArea.scrollTo({ top: scrollArea.scrollHeight, behavior: "smooth" });
-      }
-      if (textarea) {
-        textarea.focus({ preventScroll: true });
-      }
-    });
-  };
-
   const persistReview = (nextStatus) => {
-    if (nextStatus === "审核不通过" && remark.trim() === "") {
-      setError("审核不通过时需要填写处理意见。");
-      scrollToRemark();
-      return;
-    }
-
     const stamp = formatTimestamp();
-    setError("");
     setRecords((current) =>
       current.map((item) => {
         if (item.id !== record.id) return item;
@@ -487,7 +461,7 @@ export function MarkersDetailPage() {
           status: nextStatus,
           reviewedAt: stamp,
           platformUpdatedAt: nextStatus === "审核通过待更新" ? "-" : item.platformUpdatedAt,
-          reviewComment: nextStatus === "审核不通过" ? remark.trim() : "",
+          reviewComment: "",
         };
       }),
     );
@@ -543,23 +517,6 @@ export function MarkersDetailPage() {
               </div>
             </div>
 
-            <div className="review-remark-section">
-              <div className="form-block">
-                <label>审核意见</label>
-                <textarea
-                  className="textarea"
-                  rows="5"
-                  value={remark}
-                  ref={remarkInputRef}
-                  onChange={(event) => {
-                    setRemark(event.target.value);
-                    if (error) setError("");
-                  }}
-                  placeholder="请撰写审核意见"
-                />
-                {error ? <span className="form-error">{error}</span> : null}
-              </div>
-            </div>
           </div>
 
           <div className="review-operation-footer">

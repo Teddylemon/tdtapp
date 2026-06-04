@@ -17,7 +17,7 @@ import { MarkersListPage, MarkersDetailPage } from "./modules/markers/MarkersPag
 import { TopicListPage, TopicDetailPage } from "./modules/topic/TopicPage";
 import { FeedbackListPage, FeedbackDetailPage } from "./modules/feedback/FeedbackPage";
 import { NotificationListPage, NotificationDetailPage } from "./modules/notifications/NotificationPage";
-import { TaskListPage, TaskCreatePage, TaskDetailPage } from "./modules/tasks/TaskPage";
+import { TaskListPage, TaskCreatePage, TaskDetailPage, TaskEditPage } from "./modules/tasks/TaskPage";
 import { BannerListPage, BannerDetailPage } from "./modules/banners/BannerPage";
 
 const menuSections = [
@@ -39,7 +39,7 @@ const menuSections = [
     group: "用户上传",
     items: [
       { path: "/review", label: "纠错反馈管理", icon: "review" },
-      { path: "/markers", label: "标签上传管理", icon: "markers" },
+      { path: "/markers", label: "标绘上传管理", icon: "markers" },
       { path: "/feedback", label: "意见反馈管理", icon: "feedback" },
     ],
   },
@@ -75,6 +75,7 @@ function App() {
           <Route path="/banners/:bannerId" element={<BannerDetailPage />} />
           <Route path="/tasks" element={<TaskListPage />} />
           <Route path="/tasks/new" element={<TaskCreatePage />} />
+          <Route path="/tasks/:taskId/edit" element={<TaskEditPage />} />
           <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
           <Route path="/release-notes" element={<ReleaseNotesManager />} />
           <Route path="/ops" element={<MonitoringPageModule />} />
@@ -90,7 +91,7 @@ function resolveRouteMeta(pathname) {
   if (pathname.startsWith("/system/")) return { title: "用户角色管理", parent: "" };
   if (pathname.startsWith("/tasks/")) return { title: "", parent: "任务下发管理", hideHeader: true };
   if (pathname.startsWith("/review/")) return { title: "", parent: "纠错反馈管理", hideHeader: true };
-  if (pathname.startsWith("/markers/")) return { title: "", parent: "标签上传管理", hideHeader: true };
+  if (pathname.startsWith("/markers/")) return { title: "", parent: "标绘上传管理", hideHeader: true };
   if (pathname.startsWith("/topic/")) return { title: "", parent: "主题地图发布管理", hideHeader: true };
   if (pathname.startsWith("/feedback/")) return { title: "", parent: "意见反馈管理", hideHeader: true };
   if (pathname.startsWith("/notifications/")) return { title: "", parent: "消息推送管理", hideHeader: true };

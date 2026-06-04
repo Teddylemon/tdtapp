@@ -133,6 +133,7 @@ export function NotificationListPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [showModal, setShowModal] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   const filteredRecords = useMemo(() => {
     return records.filter((rec) => {
@@ -179,9 +180,21 @@ export function NotificationListPage() {
     showToast("消息已发送");
   };
 
-  const handleCreate = (newRecord) => {
-    addRecord(newRecord);
+  const handleSubmitRecord = (nextRecord) => {
+    const isEditing = records.some((item) => item.id === nextRecord.id);
+    if (isEditing) {
+      updateRecord(nextRecord.id, nextRecord);
+    } else {
+      addRecord(nextRecord);
+    }
     setShowModal(false);
+    setEditingRecord(null);
+    showToast(
+      nextRecord.status === "已发送"
+        ? isEditing ? "消息已更新并推送" : "消息已创建并推送"
+        : isEditing ? "草稿已更新" : "草稿已保存",
+    );
+    return;
     showToast("消息创建成功");
   };
 
@@ -205,7 +218,10 @@ export function NotificationListPage() {
           <button
             type="button"
             className="primary-button slim-button"
-            onClick={() => setShowModal(true)}
+            onClick={() => {
+              setEditingRecord(null);
+              setShowModal(true);
+            }}
           >
             <span>新建消息</span>
           </button>
@@ -289,6 +305,18 @@ export function NotificationListPage() {
                     查看
                   </button>
                   {rec.status === "草稿" ? (
+                    <>
+                      <button
+                        type="button"
+                        className="inline-button"
+                        onClick={() => {
+                          setEditingRecord(rec);
+                          setShowModal(true);
+                        }}
+                      >
+                        <ButtonIcon type="edit" />
+                        编辑
+                      </button>
                     <button
                       type="button"
                       className="inline-button action-publish"
@@ -297,6 +325,7 @@ export function NotificationListPage() {
                       <ButtonIcon type="up" />
                       发送
                     </button>
+                    </>
                   ) : (
                     <button
                       type="button"
@@ -319,8 +348,12 @@ export function NotificationListPage() {
 
       {showModal && (
         <NotificationModal
-          onClose={() => setShowModal(false)}
-          onSubmit={handleCreate}
+          onClose={() => {
+            setShowModal(false);
+            setEditingRecord(null);
+          }}
+          onSubmit={handleSubmitRecord}
+          initialRecord={editingRecord}
         />
       )}
     </div>
@@ -333,6 +366,7 @@ export function NotificationDetailPage() {
   const navigate = useNavigate();
   const { notificationId } = useParams();
   const { records, updateRecord, deleteRecord } = useRecords();
+  const [editingRecord, setEditingRecord] = useState(null);
 
   const record = records.find((r) => r.id === notificationId);
 
@@ -376,21 +410,26 @@ export function NotificationDetailPage() {
           </div>
         </div>
         <div className="topic-detail-toolbar notification-detail-toolbar">
-          {record.status === "草稿" && (
-            <button
-              type="button"
-              className="primary-button slim-button"
-              onClick={() => {
-                updateRecord(record.id, {
-                  status: "已发送",
-                  sentAt: formatTimestamp(new Date()),
-                });
-                showToast("消息已发送");
-              }}
-            >
-              发送消息
-            </button>
-          )}
+          {record.status === "草稿" ? (
+            <>
+              <button type="button" className="ghost-button slim-button" onClick={() => setEditingRecord(record)}>
+                编辑
+              </button>
+              <button
+                type="button"
+                className="primary-button slim-button"
+                onClick={() => {
+                  updateRecord(record.id, {
+                    status: "已发送",
+                    sentAt: formatTimestamp(new Date()),
+                  });
+                  showToast("消息已发送");
+                }}
+              >
+                发送消息
+              </button>
+            </>
+          ) : null}
           <button type="button" className="ghost-button slim-button danger-button" onClick={handleDelete}>
             删除
           </button>
@@ -432,19 +471,40 @@ export function NotificationDetailPage() {
           <div className="notification-detail-content-body">{record.content}</div>
         </div>
       </div>
+      {editingRecord ? (
+        <NotificationModal
+          initialRecord={editingRecord}
+          onClose={() => setEditingRecord(null)}
+          onSubmit={(nextRecord) => {
+            updateRecord(record.id, nextRecord);
+            setEditingRecord(null);
+            showToast(nextRecord.status === "已发送" ? "消息已更新并推送" : "草稿已更新");
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
 /* ─── Create Modal ─── */
 
-function NotificationModal({ onClose, onSubmit }) {
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [tags, setTags] = useState([]);
+function NotificationModal({ onClose, onSubmit, initialRecord = null }) {
+  const isEditing = Boolean(initialRecord);
+  const [title, setTitle] = useState(initialRecord?.title ?? "");
+  const [content, setContent] = useState(initialRecord?.content ?? "");
+  const [tags, setTags] = useState(initialRecord?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
-  const [coverImage, setCoverImage] = useState("");
+  const [coverImage, setCoverImage] = useState(initialRecord?.coverImage ?? "");
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    setTitle(initialRecord?.title ?? "");
+    setContent(initialRecord?.content ?? "");
+    setTags(initialRecord?.tags ?? []);
+    setTagInput("");
+    setCoverImage(initialRecord?.coverImage ?? "");
+    setErrors({});
+  }, [initialRecord]);
 
   const addTag = () => {
     const val = tagInput.trim();
@@ -477,30 +537,33 @@ function NotificationModal({ onClose, onSubmit }) {
   const handleSave = (status) => {
     if (!validate()) return;
     const now = formatTimestamp(new Date());
-    const id = `MSG-${String(Date.now()).slice(-6)}`;
     onSubmit({
-      id,
-      type: "系统通知",
+      id: initialRecord?.id ?? `MSG-${String(Date.now()).slice(-6)}`,
+      type: initialRecord?.type ?? "系统通知",
       title: title.trim(),
       content: content.trim(),
       tags,
       status,
-      createdAt: now,
-      sentAt: status === "已发送" ? now : "",
-      readCount: 0,
+      createdAt: initialRecord?.createdAt ?? now,
+      sentAt: status === "已发送" ? (initialRecord?.sentAt || now) : "",
+      readCount: initialRecord?.readCount ?? 0,
       coverImage,
     });
   };
 
   return (
     <div className="export-modal-overlay" onClick={onClose}>
-      <div className="export-modal-card" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="export-modal-card notification-create-modal"
+        style={{ maxWidth: 720 }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="export-modal-header">
-          <h3>新建消息</h3>
+          <h3>{isEditing ? "编辑消息" : "新建消息"}</h3>
           <button type="button" className="export-modal-close" onClick={onClose}>×</button>
         </div>
 
-        <div className="topic-upload-body">
+        <div className="topic-upload-body notification-create-body">
           <div className="form-block">
             <label>标题</label>
             <input
@@ -584,7 +647,7 @@ function NotificationModal({ onClose, onSubmit }) {
           </div>
         </div>
 
-        <div className="export-modal-footer">
+        <div className="export-modal-footer notification-create-footer">
           <button type="button" className="ghost-button slim-button" onClick={onClose}>
             取消
           </button>
@@ -592,7 +655,7 @@ function NotificationModal({ onClose, onSubmit }) {
             保存草稿
           </button>
           <button type="button" className="primary-button slim-button" onClick={() => handleSave("已发送")}>
-            直接发送
+            保存并推送
           </button>
         </div>
       </div>

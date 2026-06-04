@@ -1,4 +1,6 @@
 export const USER_STORAGE_KEY = "tdt-role-user-state";
+export const USER_STORAGE_VERSION_KEY = "tdt-role-user-state-version";
+export const USER_STORAGE_VERSION = 2;
 export const PROVINCE_NAME = "湖北省";
 export const ALL_COUNTIES = "全部区县";
 
@@ -9,9 +11,10 @@ export const USER_ROLE_OPTIONS = [
   "市级职员",
   "县级管理员",
   "县级职员",
+  "公众用户",
 ];
 
-export const USER_LEVEL_OPTIONS = ["省级", "市级", "县级"];
+export const USER_LEVEL_OPTIONS = ["省级", "市级", "县级", "公众"];
 
 export const CITY_COUNTY_MAP = {
   武汉市: ["洪山区", "江夏区", "东西湖区"],
@@ -212,11 +215,42 @@ export const MOCK_USERS = [
     title: "县级核查员",
     role: "县级职员",
   }),
+  createUser({
+    id: "2000019",
+    nickname: "徐航",
+    phone: "13807110019",
+    city: "-",
+    county: "-",
+    organization: "公众注册用户",
+    title: "公众用户",
+    role: "公众用户",
+  }),
+  createUser({
+    id: "2000020",
+    nickname: "林悦",
+    phone: "13807110020",
+    city: "-",
+    county: "-",
+    organization: "公众注册用户",
+    title: "公众用户",
+    role: "公众用户",
+  }),
+  createUser({
+    id: "2000021",
+    nickname: "周柠",
+    phone: "13807110021",
+    city: "-",
+    county: "-",
+    organization: "公众注册用户",
+    title: "公众用户",
+    role: "公众用户",
+  }),
 ];
 
 export function getRoleLevel(role) {
   if (role.startsWith("省级")) return "省级";
   if (role.startsWith("市级")) return "市级";
+  if (role.startsWith("公众")) return "公众";
   return "县级";
 }
 
@@ -225,7 +259,7 @@ export function getCityOptions(users = MOCK_USERS) {
     new Set(
       users
         .map((user) => user.city)
-        .filter((city) => city && city !== "省级"),
+        .filter((city) => city && city !== "省级" && city !== "-"),
     ),
   );
 }
@@ -238,7 +272,15 @@ export function readUserRecords() {
   if (typeof window === "undefined") return MOCK_USERS;
   try {
     const stored = JSON.parse(window.localStorage.getItem(USER_STORAGE_KEY) ?? "null");
-    return Array.isArray(stored) && stored.length > 0 ? stored : MOCK_USERS;
+    if (Array.isArray(stored) && stored.length > 0) {
+      const existingIds = new Set(stored.map((user) => user.id));
+      const publicSeeds = MOCK_USERS.filter(
+        (user) => user.role === "公众用户" && !existingIds.has(user.id),
+      );
+      return publicSeeds.length > 0 ? [...publicSeeds, ...stored] : stored;
+    }
+
+    return MOCK_USERS;
   } catch {
     return MOCK_USERS;
   }
@@ -247,6 +289,7 @@ export function readUserRecords() {
 export function persistUserRecords(users) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(users));
+  window.localStorage.setItem(USER_STORAGE_VERSION_KEY, String(USER_STORAGE_VERSION));
 }
 
 export function getAreaText(user) {

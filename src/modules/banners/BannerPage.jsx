@@ -690,6 +690,7 @@ export function BannerListPage() {
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   const statusCounts = useMemo(
     () =>
@@ -749,9 +750,22 @@ export function BannerListPage() {
     showToast("通知公告已删除。");
   };
 
-  const handleCreate = (record) => {
-    addRecord(record);
+  const handleSubmitRecord = (record) => {
+    const isEditing = records.some((item) => item.id === record.id);
+    if (isEditing) {
+      updateRecord(record.id, record);
+    } else {
+      addRecord(record);
+    }
     setShowModal(false);
+    setEditingRecord(null);
+    showToast(
+      record.status === STATUS_PUBLISHED
+        ? isEditing ? "通知公告已更新并上线。" : "通知公告已上线。"
+        : isEditing ? "草稿已更新。" : "草稿已保存。",
+      "success",
+    );
+    return;
     showToast(record.status === STATUS_PUBLISHED ? "通知公告已上线。" : "草稿已保存。", "success");
   };
 
@@ -771,7 +785,10 @@ export function BannerListPage() {
           <button
             type="button"
             className="primary-button slim-button"
-            onClick={() => setShowModal(true)}
+            onClick={() => {
+              setEditingRecord(null);
+              setShowModal(true);
+            }}
           >
             新建通知公告
           </button>
@@ -805,7 +822,7 @@ export function BannerListPage() {
               <span>编号</span>
               <span>封面图片</span>
               <span>标题与内容概述</span>
-              <span>跳转类型</span>
+              <span>公告类型</span>
               <span>到期时间</span>
               <span>状态</span>
               <span>操作</span>
@@ -857,6 +874,19 @@ export function BannerListPage() {
                       <ButtonIcon type="view" />
                       <span>查看</span>
                     </button>
+                    {record.status === STATUS_DRAFT ? (
+                      <button
+                        type="button"
+                        className="inline-button"
+                        onClick={() => {
+                          setEditingRecord(record);
+                          setShowModal(true);
+                        }}
+                      >
+                        <ButtonIcon type="edit" />
+                        <span>编辑</span>
+                      </button>
+                    ) : null}
                     {record.status === STATUS_PUBLISHED ? (
                       <button
                         type="button"
@@ -894,7 +924,16 @@ export function BannerListPage() {
         </div>
       </ListShell>
 
-      {showModal ? <BannerModal onClose={() => setShowModal(false)} onSubmit={handleCreate} /> : null}
+      {showModal ? (
+        <BannerModal
+          onClose={() => {
+            setShowModal(false);
+            setEditingRecord(null);
+          }}
+          onSubmit={handleSubmitRecord}
+          initialRecord={editingRecord}
+        />
+      ) : null}
     </div>
   );
 }
@@ -903,6 +942,7 @@ export function BannerDetailPage() {
   const navigate = useNavigate();
   const { bannerId } = useParams();
   const { records, updateRecord, deleteRecord } = useRecords();
+  const [editingRecord, setEditingRecord] = useState(null);
   const record = records.find((item) => item.id === bannerId);
 
   if (!record) {
@@ -974,6 +1014,12 @@ export function BannerDetailPage() {
           {expired ? (
             <span className="banner-detail-expired-hint">已过期，请调整到期时间后重新上线</span>
           ) : null}
+          {record.status === STATUS_DRAFT ? (
+            <button type="button" className="ghost-button slim-button" onClick={() => setEditingRecord(record)}>
+              <ButtonIcon type="edit" />
+              <span>编辑</span>
+            </button>
+          ) : null}
           {record.status === STATUS_PUBLISHED ? (
             <button type="button" className="ghost-button slim-button" onClick={handleOffline}>
               <ButtonIcon type="down" />
@@ -1037,19 +1083,46 @@ export function BannerDetailPage() {
           </div>
         </div>
       </div>
+
+      {editingRecord ? (
+        <BannerModal
+          initialRecord={editingRecord}
+          onClose={() => setEditingRecord(null)}
+          onSubmit={(nextRecord) => {
+            updateRecord(record.id, nextRecord);
+            setEditingRecord(null);
+            showToast(
+              nextRecord.status === STATUS_PUBLISHED ? "通知公告已更新并上线。" : "草稿已更新。",
+              "success",
+            );
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-function BannerModal({ onClose, onSubmit }) {
-  const [title, setTitle] = useState("");
-  const [type, setType] = useState(TYPE_URL);
-  const [content, setContent] = useState("");
-  const [summary, setSummary] = useState("");
-  const [coverImage, setCoverImage] = useState("");
-  const [contentImage, setContentImage] = useState("");
-  const [expiresAt, setExpiresAt] = useState("");
+function BannerModal({ onClose, onSubmit, initialRecord = null }) {
+  const isEditing = Boolean(initialRecord);
+  const [title, setTitle] = useState(initialRecord?.title ?? "");
+  const [type, setType] = useState(initialRecord?.type ?? TYPE_URL);
+  const [content, setContent] = useState(initialRecord?.content ?? "");
+  const [summary, setSummary] = useState(initialRecord?.summary ?? "");
+  const [coverImage, setCoverImage] = useState(initialRecord?.coverImage ?? "");
+  const [contentImage, setContentImage] = useState(initialRecord?.contentImage ?? "");
+  const [expiresAt, setExpiresAt] = useState(initialRecord?.expiresAt ? initialRecord.expiresAt.replace(" ", "T") : "");
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    setTitle(initialRecord?.title ?? "");
+    setType(initialRecord?.type ?? TYPE_URL);
+    setContent(initialRecord?.content ?? "");
+    setSummary(initialRecord?.summary ?? "");
+    setCoverImage(initialRecord?.coverImage ?? "");
+    setContentImage(initialRecord?.contentImage ?? "");
+    setExpiresAt(initialRecord?.expiresAt ? initialRecord.expiresAt.replace(" ", "T") : "");
+    setErrors({});
+  }, [initialRecord]);
 
   const validate = () => {
     const nextErrors = {};
@@ -1076,7 +1149,7 @@ function BannerModal({ onClose, onSubmit }) {
     if (!validate()) return;
     const now = formatTimestamp(new Date());
     onSubmit({
-      id: `BAN-${String(Date.now()).slice(-6)}`,
+      id: initialRecord?.id ?? `BAN-${String(Date.now()).slice(-6)}`,
       title: title.trim(),
       type,
       content: type === TYPE_URL ? content.trim() : content,
@@ -1084,12 +1157,12 @@ function BannerModal({ onClose, onSubmit }) {
       coverImage,
       contentImage,
       status,
-      createdAt: now,
-      publishedAt: status === STATUS_PUBLISHED ? now : "",
+      createdAt: initialRecord?.createdAt ?? now,
+      publishedAt: status === STATUS_PUBLISHED ? (initialRecord?.publishedAt || now) : "",
       offlineAt: "",
       expiresAt: normalizeDateTimeValue(expiresAt),
-      readCount: 0,
-      sortOrder: 0,
+      readCount: initialRecord?.readCount ?? 0,
+      sortOrder: initialRecord?.sortOrder ?? 0,
     });
   };
 
@@ -1097,7 +1170,7 @@ function BannerModal({ onClose, onSubmit }) {
     <div className="export-modal-overlay">
       <div className="export-modal-card banner-modal-card">
         <div className="export-modal-header">
-          <h3>新建通知公告</h3>
+          <h3>{isEditing ? "编辑通知公告" : "新建通知公告"}</h3>
           <button type="button" className="export-modal-close" onClick={onClose}>
             &times;
           </button>
@@ -1283,7 +1356,7 @@ function BannerModal({ onClose, onSubmit }) {
             className="primary-button slim-button"
             onClick={() => handleSave(STATUS_PUBLISHED)}
           >
-            直接上线
+            保存并推送
           </button>
         </div>
       </div>

@@ -287,6 +287,7 @@ export function TopicListPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   const filteredRecords = records.filter((item) => {
     const keyword = searchText.trim().toLowerCase();
@@ -360,7 +361,7 @@ export function TopicListPage() {
     updateStatuses(selectedIds, targetStatus);
   };
 
-  const handleUploadSubmit = async ({ name, description, imagePreview, publish }) => {
+  const handleUploadSubmit = async ({ id, name, description, imagePreview, publish }) => {
     const now = new Date();
     const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
       now.getDate(),
@@ -370,7 +371,7 @@ export function TopicListPage() {
       return Number.isFinite(num) ? Math.max(max, num) : max;
     }, 0);
 
-    const newId = `TM-${String(maxId + 1).padStart(3, "0")}`;
+    const newId = id ?? `TM-${String(maxId + 1).padStart(3, "0")}`;
 
     try {
       await setTopicImage(newId, imagePreview);
@@ -390,7 +391,16 @@ export function TopicListPage() {
       imageKey: "",
     };
 
-    setRecords((current) => [newRecord, ...current]);
+    setRecords((current) =>
+      id ? current.map((item) => (item.id === id ? { ...item, ...newRecord } : item)) : [newRecord, ...current],
+    );
+    setUploadOpen(false);
+    setEditingRecord(null);
+    showToast(
+      publish ? (id ? "主题地图已更新并上架" : "已上传并上架") : (id ? "草稿已更新" : "已上传，可在列表中上架"),
+      "success",
+    );
+    return;
     showToast(publish ? "已上传并上架" : "已上传，可在列表中上架", "success");
   };
 
@@ -410,7 +420,10 @@ export function TopicListPage() {
           />
         }
         actions={
-          <button type="button" className="primary-button slim-button" onClick={() => setUploadOpen(true)}>
+          <button type="button" className="primary-button slim-button" onClick={() => {
+            setEditingRecord(null);
+            setUploadOpen(true);
+          }}>
             <span>上传主题地图</span>
           </button>
         }
@@ -507,6 +520,19 @@ export function TopicListPage() {
                     <ButtonIcon type="view" />
                     <span>查看</span>
                   </button>
+                  {record.status === TOPIC_STATUS_UNPUBLISHED ? (
+                    <button
+                      type="button"
+                      className="inline-button"
+                      onClick={() => {
+                        setEditingRecord(record);
+                        setUploadOpen(true);
+                      }}
+                    >
+                      <ButtonIcon type="edit" />
+                      <span>编辑</span>
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className={`inline-button action-publish ${record.status === TOPIC_STATUS_PUBLISHED ? "danger-button" : ""}`}
@@ -523,8 +549,12 @@ export function TopicListPage() {
       </ListShell>
       <TopicUploadModal
         open={uploadOpen}
-        onClose={() => setUploadOpen(false)}
+        onClose={() => {
+          setUploadOpen(false);
+          setEditingRecord(null);
+        }}
         onSubmit={handleUploadSubmit}
+        initialRecord={editingRecord}
       />
     </div>
   );
@@ -534,6 +564,7 @@ export function TopicDetailPage() {
   const { topicId } = useParams();
   const navigate = useNavigate();
   const [records, setRecords] = useTopicMapRecords();
+  const [editingRecord, setEditingRecord] = useState(null);
   const record = records.find((item) => item.id === topicId) ?? records[0];
 
   if (!record) return null;
@@ -566,6 +597,12 @@ export function TopicDetailPage() {
           </div>
         </div>
         <div className="topic-detail-toolbar">
+          {record.status === TOPIC_STATUS_UNPUBLISHED ? (
+            <button type="button" className="ghost-button slim-button" onClick={() => setEditingRecord(record)}>
+              <ButtonIcon type="edit" />
+              <span>编辑</span>
+            </button>
+          ) : null}
           <button type="button" className={record.status === TOPIC_STATUS_PUBLISHED ? "ghost-button slim-button" : "primary-button slim-button"} onClick={toggleStatus}>
             <ButtonIcon type={record.status === TOPIC_STATUS_PUBLISHED ? "down" : "up"} />
             <span>{topicActionLabel(record.status)}</span>
@@ -580,6 +617,35 @@ export function TopicDetailPage() {
       <section className="topic-detail-map-shell">
         <TopicMapViewer record={record} />
       </section>
+      <TopicUploadModal
+        open={Boolean(editingRecord)}
+        onClose={() => setEditingRecord(null)}
+        onSubmit={async (payload) => {
+          const now = new Date();
+          const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+            now.getDate(),
+          ).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+          await setTopicImage(record.id, payload.imagePreview);
+          setRecords((current) =>
+            current.map((item) =>
+              item.id === record.id
+                ? {
+                    ...item,
+                    name: payload.name,
+                    description: payload.description,
+                    status: payload.publish ? TOPIC_STATUS_PUBLISHED : TOPIC_STATUS_UNPUBLISHED,
+                    updatedAt: stamp,
+                    thumbnail: payload.imagePreview,
+                    imageKey: "",
+                  }
+                : item,
+            ),
+          );
+          setEditingRecord(null);
+          showToast(payload.publish ? "主题地图已更新并上架" : "草稿已更新", "success");
+        }}
+        initialRecord={editingRecord}
+      />
     </div>
   );
 }
@@ -594,7 +660,8 @@ export function TopicMapViewer({ record }) {
   );
 }
 
-function TopicUploadModal({ open, onClose, onSubmit }) {
+function TopicUploadModal({ open, onClose, onSubmit, initialRecord = null }) {
+  const isEditing = Boolean(initialRecord);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [imageFile, setImageFile] = useState(null);
@@ -616,6 +683,16 @@ function TopicUploadModal({ open, onClose, onSubmit }) {
     onClose();
   };
 
+  useEffect(() => {
+    if (!open) return;
+    setName(initialRecord?.name ?? "");
+    setDescription(initialRecord?.description ?? "");
+    setImageFile(null);
+    setImagePreview(initialRecord?.thumbnail ?? "");
+    setError("");
+    setSubmitting(false);
+  }, [initialRecord, open]);
+
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -634,13 +711,13 @@ function TopicUploadModal({ open, onClose, onSubmit }) {
       setError("请填写描述");
       return;
     }
-    if (!imageFile) {
+    if (!imagePreview) {
       setError("请上传图片");
       return;
     }
     setError("");
     setSubmitting(true);
-    onSubmit({ name: name.trim(), description: description.trim(), imagePreview, publish });
+    onSubmit({ id: initialRecord?.id, name: name.trim(), description: description.trim(), imagePreview, publish });
     resetForm();
     onClose();
   };
@@ -676,7 +753,7 @@ function TopicUploadModal({ open, onClose, onSubmit }) {
             />
           </div>
           <div className="form-block">
-            <label>封面图片</label>
+            <label>主题图片</label>
             <div className="topic-upload-image-area">
               {imagePreview ? (
                 <div className="topic-upload-preview">

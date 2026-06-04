@@ -3009,6 +3009,37 @@ select {
   border-radius: 12px;
 }
 
+.image-lightbox-thumbs {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.image-lightbox-thumb {
+  width: 72px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid #ddd5cb;
+  border-radius: 10px;
+  background: #f8f5f0;
+  overflow: hidden;
+  opacity: 0.78;
+}
+
+.image-lightbox-thumb.is-active {
+  border-color: #8f775e;
+  opacity: 1;
+  box-shadow: 0 0 0 2px rgba(143, 119, 94, 0.14);
+}
+
+.image-lightbox-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+}
+
 .image-lightbox-close {
   position: absolute;
   top: 10px;

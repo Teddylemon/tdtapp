@@ -325,6 +325,25 @@
   opacity: 1;
 }
 
+.notification-create-modal {
+  display: flex;
+  flex-direction: column;
+  height: min(780px, calc(100vh - 40px));
+  overflow: hidden;
+}
+
+.notification-create-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.notification-create-footer {
+  flex: 0 0 auto;
+  margin-top: 16px;
+}
+
 /* Cover image upload styles */
 .banner-cover-upload {
   min-height: 100px;

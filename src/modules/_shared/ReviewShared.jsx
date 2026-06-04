@@ -38,9 +38,7 @@ export function parseCoordinateText(text) {
 
 export function getReviewMapData(record) {
   if (record.module === "markers") {
-    const points = (record.markerCoordinates ?? [])
-      .map((item) => parseCoordinateText(item))
-      .filter(Boolean);
+    const points = (record.markerCoordinates ?? []).map((item) => parseCoordinateText(item)).filter(Boolean);
     return {
       geometry: record.markerGeometry ?? "point",
       center: points[0] ?? [30.6031, 114.3148],
@@ -48,10 +46,12 @@ export function getReviewMapData(record) {
     };
   }
 
-  const points = [record.currentCoordinate, record.nextCoordinate]
-    .filter(Boolean)
-    .map((item) => parseCoordinateText(item))
-    .filter(Boolean);
+  const sourceCoordinates =
+    record.correctionType === "新增地点" || record.locationCoordinate
+      ? [record.locationCoordinate]
+      : [record.currentCoordinate, record.nextCoordinate];
+
+  const points = sourceCoordinates.filter(Boolean).map((item) => parseCoordinateText(item)).filter(Boolean);
 
   return {
     geometry: "correction",
@@ -80,31 +80,36 @@ export function ReviewLeafletMap({ record, mapData }) {
       <MapContainer center={mapData.center} zoom={15} className="review-leaflet-map" scrollWheelZoom>
         <ReviewMapResize />
         <TileLayer
-          attribution='&copy; OpenStreetMap contributors'
+          attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         {record.module === "corrections"
-          ? mapData.points.map((point, index) => (
-              <CircleMarker
-                key={`${record.id}-${index}`}
-                center={point}
-                radius={10}
-                pathOptions={{
-                  color: "#27272a",
-                  weight: 2,
-                  fillColor: index === 0 ? "#9ca3af" : "#f0b44b",
-                  fillOpacity: 0.92,
-                }}
-              >
-                <Tooltip direction="top" offset={[0, -10]} permanent>
-                  {index === 0 ? "旧地点" : "新地点"}
-                </Tooltip>
-                <Popup>
-                  <strong>{record.title}</strong>
-                  <div>{index === 0 ? "旧地点" : "新地点"}</div>
-                </Popup>
-              </CircleMarker>
-            ))
+          ? mapData.points.map((point, index) => {
+              const isNewPlace = record.correctionType === "新增地点";
+              const pointLabel = isNewPlace ? "提交位置" : index === 0 ? "旧地点" : "新地点";
+
+              return (
+                <CircleMarker
+                  key={`${record.id}-${index}`}
+                  center={point}
+                  radius={10}
+                  pathOptions={{
+                    color: "#27272a",
+                    weight: 2,
+                    fillColor: isNewPlace ? "#2563eb" : index === 0 ? "#9ca3af" : "#f0b44b",
+                    fillOpacity: 0.92,
+                  }}
+                >
+                  <Tooltip direction="top" offset={[0, -10]} permanent>
+                    {pointLabel}
+                  </Tooltip>
+                  <Popup>
+                    <strong>{record.title}</strong>
+                    <div>{pointLabel}</div>
+                  </Popup>
+                </CircleMarker>
+              );
+            })
           : null}
         {record.module === "markers" && mapData.geometry === "point"
           ? mapData.points.map((point, index) => (
