@@ -457,6 +457,50 @@ select {
   font-weight: 700;
 }
 
+.topbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.topbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid #d9d1c6;
+  border-radius: 8px;
+  background: #fffdfa;
+  color: #4e463f;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.topbar-btn:hover:not(:disabled) {
+  border-color: #c5bfb5;
+  background: #ffffff;
+}
+
+.topbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.topbar-btn-primary {
+  background: #24211d;
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 6px 12px rgba(36, 33, 29, 0.1);
+}
+
+.topbar-btn-primary:hover:not(:disabled) {
+  background: #0f0e0c;
+}
+
 .page-content {
   flex: 1 1 auto;
   min-width: 0;

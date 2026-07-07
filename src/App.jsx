@@ -19,6 +19,7 @@ import { FeedbackListPage, FeedbackDetailPage } from "./modules/feedback/Feedbac
 import { NotificationListPage, NotificationDetailPage } from "./modules/notifications/NotificationPage";
 import { TaskListPage, TaskCreatePage, TaskDetailPage, TaskEditPage } from "./modules/tasks/TaskPage";
 import { BannerListPage, BannerDetailPage } from "./modules/banners/BannerPage";
+import LayerConfigPage from "./modules/layers/LayerConfigPage";
 
 const menuSections = [
   {
@@ -48,11 +49,31 @@ const menuSections = [
     items: [
       { path: "/ops", label: "日志与监控", icon: "ops" },
       { path: "/system/users", label: "用户角色管理", icon: "system" },
+      { path: "/layers", label: "图层配置", icon: "layers" },
     ],
   },
 ];
 
 const flattenedMenuItems = menuSections.flatMap((section) => section.items);
+
+function LayerTopbarActions() {
+  const [, forceUpdate] = useState(0);
+  const handlers = window.__layerConfigPage;
+
+  useEffect(() => {
+    const interval = setInterval(() => forceUpdate((n) => n + 1), 300);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (!handlers) return null;
+
+  return (
+    <div className="topbar-actions">
+      <button type="button" className="topbar-btn" onClick={handlers.handleRestoreDefault}>恢复默认</button>
+      <button type="button" className="topbar-btn topbar-btn-primary" onClick={handlers.handleSave} disabled={!handlers.hasChanges}>保存配置</button>
+    </div>
+  );
+}
 
 function App() {
   return (
@@ -79,6 +100,7 @@ function App() {
           <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
           <Route path="/release-notes" element={<ReleaseNotesManager />} />
           <Route path="/ops" element={<MonitoringPageModule />} />
+          <Route path="/layers" element={<LayerConfigPage />} />
           <Route path="/system" element={<Navigate to="/system/users" replace />} />
           <Route path="/system/:tab" element={<RoleManagementPageModule />} />
         </Route>
@@ -97,6 +119,7 @@ function resolveRouteMeta(pathname) {
   if (pathname.startsWith("/notifications/")) return { title: "", parent: "消息推送管理", hideHeader: true };
   if (pathname.startsWith("/banners/")) return { title: "", parent: "通知公告管理", hideHeader: true };
   if (pathname.startsWith("/tasks")) return { title: "任务下发管理", parent: "" };
+  if (pathname.startsWith("/layers")) return { title: "图层配置", parent: "" };
 
   const item = flattenedMenuItems.find((entry) => entry.path === pathname);
   return item ? { title: item.label, parent: "" } : { title: "用户行为分析", parent: "" };
@@ -212,6 +235,7 @@ function AppLayoutShell() {
             <div>
               <h1>{currentMeta.title}</h1>
             </div>
+            {location.pathname.startsWith("/layers") && <LayerTopbarActions />}
           </header>
         ) : null}
         <Outlet />
@@ -314,6 +338,15 @@ function NavIcon({ type }) {
             <rect x="3" y="4" width="14" height="12" rx="2" />
             <path d="M3 8h14" />
             <path d="M7 12h3" />
+          </>
+        )}
+        {type === "layers" && (
+          <>
+            <path d="M2 5h16" />
+            <path d="M2 10h16" />
+            <path d="M2 15h16" />
+            <path d="M6 3v14" />
+            <path d="M14 3v14" />
           </>
         )}
       </svg>
